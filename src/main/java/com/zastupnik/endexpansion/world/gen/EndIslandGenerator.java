@@ -23,16 +23,6 @@ public class EndIslandGenerator {
         int mainY = getIslandY(rand);
 
         for (int i = 0; i < islandCount; i++) {
-            int ox = cx, oz = cz, oy = mainY;
-
-            if (i > 0) {
-                float a    = rand.nextFloat() * (float)(Math.PI * 2);
-                int   dist = 70 + rand.nextInt(131); // 70–200 блоков между центрами
-                ox = cx + (int)(Math.cos(a) * dist);
-                oz = cz + (int)(Math.sin(a) * dist);
-                oy = mainY + rand.nextInt(21) - 10;  // ±10 по высоте
-            }
-
             int radius;
             if (i == 0) {
                 radius = Math.max(48, baseRadius + 8 + rand.nextInt(17));
@@ -43,6 +33,38 @@ public class EndIslandGenerator {
                 radius = Math.max(40, baseRadius + rand.nextInt(15) - 3);
             }
             int thickness = pickThickness(rand);
+
+            int ox = cx, oz = cz, oy = mainY;
+            if (i > 0) {
+                int attempts = 10;
+                boolean placed = false;
+                while (attempts-- > 0 && !placed) {
+                    float a    = rand.nextFloat() * (float)(Math.PI * 2);
+                    int   dist = 100 + rand.nextInt(221); // 100–320 блоков между центрами
+                    int tx = cx + (int)(Math.cos(a) * dist);
+                    int tz = cz + (int)(Math.sin(a) * dist);
+                    int ty = mainY + rand.nextInt(25) - 12; // ±12 по высоте
+
+                    boolean intersects = false;
+                    for (IslandNode other : nodes) {
+                        int dx = tx - other.x;
+                        int dz = tz - other.z;
+                        int dy = Math.abs(ty - other.y);
+                        int minDist = (int)((radius + other.radius) * 0.92F) + 18;
+                        if (dx * dx + dz * dz < minDist * minDist || dy < 4) {
+                            intersects = true;
+                            break;
+                        }
+                    }
+
+                    if (!intersects) {
+                        ox = tx;
+                        oz = tz;
+                        oy = ty;
+                        placed = true;
+                    }
+                }
+            }
 
             Block top    = getTopBlock(biome);
             Block filler = getFillerBlock(biome, rand);
@@ -521,7 +543,7 @@ public class EndIslandGenerator {
      */
     private void applySurfaceRelief(World world, Random rand, int cx, int cy, int cz,
                                     int radius, BiomeGenBase biome) {
-        int reliefRadius = Math.max(14, (int)(radius * 0.85F));
+        int reliefRadius = Math.max(14, (int)(radius * 0.92F));
         double phaseX = rand.nextDouble() * Math.PI * 2.0D;
         double phaseZ = rand.nextDouble() * Math.PI * 2.0D;
         double ridgePhase = rand.nextDouble() * Math.PI * 2.0D;
@@ -539,16 +561,17 @@ public class EndIslandGenerator {
                 if (topY < cy - 24 || topY > cy + 28) continue;
 
                 double edgeFactor = 1.0D - (dist / reliefRadius);
-                double macro = Math.sin(x * 0.055D + phaseX) + Math.cos(z * 0.052D + phaseZ);
-                double ridge = Math.sin((x * 0.09D - z * 0.075D) + ridgePhase) * 1.1D;
-                double micro = Math.sin((x + z) * 0.165D + phaseX * 0.5D) * 0.8D;
-                int delta = (int)Math.round(edgeFactor * (macro * 1.5D + ridge + micro));
+                double macro = Math.sin(x * 0.051D + phaseX) + Math.cos(z * 0.048D + phaseZ);
+                double ridge = Math.sin((x * 0.086D - z * 0.071D) + ridgePhase) * 1.4D;
+                double micro = Math.sin((x + z) * 0.182D + phaseX * 0.5D) * 1.0D;
+                double warp = Math.cos((x * 0.034D + z * 0.031D) + ridgePhase * 0.4D) * 0.8D;
+                int delta = (int)Math.round(edgeFactor * (macro * 1.8D + ridge + micro + warp));
 
                 // Кладбище почти ровное, но не абсолютно плоское.
                 if (biome == EndBiomes.biomeCemetery) {
                     delta = Math.max(-1, Math.min(1, delta));
                 } else {
-                    delta = Math.max(-3, Math.min(5, delta));
+                    delta = Math.max(-4, Math.min(7, delta));
                 }
 
                 if (delta > 0) {
@@ -613,21 +636,33 @@ public class EndIslandGenerator {
     // ===== ОКЕАН =====
 
     private void fillOceanBasin(World world, Random rand, int cx, int cy, int cz, int radius) {
-        int r = Math.max(7, radius + 4);
-        int wl = cy - 1;
-        int depth = 6 + rand.nextInt(5);
+        int r = Math.max(8, radius + 6);
+        int wl = cy - 2;
+        int depth = 8 + rand.nextInt(6);
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 double dist = Math.sqrt(dx * dx + dz * dz);
                 double norm = dist / r;
                 if (norm > 1.0D) continue;
 
-                int localDepth = depth - (int)(norm * 3.0D);
+                double bowl = (1.0D - norm);
+                int localDepth = (int)Math.round(3 + depth * bowl * bowl);
                 localDepth += ((dx * 13 + dz * 7) & 3) - 1;
-                if (localDepth < 3) localDepth = 3;
+                if (localDepth < 4) localDepth = 4;
+
+                // Срезаем жёсткие стенки океана: предварительно вычищаем объём чаши.
+                for (int dy = 0; dy < localDepth; dy++) {
+                    int y = wl - dy;
+                    if (!world.isAirBlock(cx + dx, y, cz + dz)) {
+                        world.setBlock(cx + dx, y, cz + dz, Blocks.air, 0, 2);
+                    }
+                }
 
                 for (int dy = 0; dy < localDepth; dy++) {
-                    world.setBlock(cx + dx, wl - dy, cz + dz, Blocks.water, 0, 2);
+                    int y = wl - dy;
+                    if (y >= wl - localDepth + 1) {
+                        world.setBlock(cx + dx, y, cz + dz, Blocks.water, 0, 2);
+                    }
                 }
 
                 int floorY = wl - localDepth;
@@ -689,7 +724,7 @@ public class EndIslandGenerator {
 
     private void populateIslandDetails(World world, Random rand, int cx, int cy, int cz,
                                        BiomeGenBase biome, int radius) {
-        int featureCount = Math.max(36, radius) + rand.nextInt(Math.max(20, radius));
+        int featureCount = Math.max(16, radius / 2) + rand.nextInt(Math.max(12, radius / 2));
         Block accent = (biome == EndBiomes.biomeOcean && EndExpansion.coralStoneEnd != null)
                 ? EndExpansion.coralStoneEnd
                 : (EndExpansion.mossyAshenStone != null ? EndExpansion.mossyAshenStone : Blocks.end_stone);
@@ -703,18 +738,19 @@ public class EndIslandGenerator {
             if (y < cy - 28 || y > cy + 30) continue;
 
             if (rand.nextInt(4) == 0) {
-                int h = 1 + rand.nextInt(4);
+                // Небольшие выступы, а не башни из блоков.
+                int h = 1 + rand.nextInt(2);
                 for (int dy = 0; dy < h; dy++) {
                     if (world.isAirBlock(x, y + dy, z)) {
                         world.setBlock(x, y + dy, z, accent, 0, 2);
                     }
                 }
             } else {
-                int ring = 1 + rand.nextInt(3);
+                int ring = 1 + rand.nextInt(2);
                 for (int dx = -ring; dx <= ring; dx++) {
                     for (int dz = -ring; dz <= ring; dz++) {
                         if (dx * dx + dz * dz > ring * ring) continue;
-                        if (rand.nextInt(4) == 0) continue;
+                        if (rand.nextInt(3) == 0) continue;
                         int py = world.getTopSolidOrLiquidBlock(x + dx, z + dz) - 1;
                         if (py >= cy - 30) world.setBlock(x + dx, py, z + dz, accent, 0, 2);
                     }
@@ -723,7 +759,7 @@ public class EndIslandGenerator {
         }
 
         // Дополнительные мини-скопления, чтобы крупные острова выглядели насыщенными
-        int clusterCount = Math.max(5, radius / 9);
+        int clusterCount = Math.max(2, radius / 14);
         for (int i = 0; i < clusterCount; i++) {
             float a = rand.nextFloat() * (float)(Math.PI * 2);
             float d = 5 + rand.nextFloat() * (radius * 0.88F);
@@ -732,7 +768,7 @@ public class EndIslandGenerator {
             int baseY = world.getTopSolidOrLiquidBlock(baseX, baseZ);
             if (baseY < cy - 26 || baseY > cy + 30) continue;
 
-            int blobR = 2 + rand.nextInt(3);
+            int blobR = 1 + rand.nextInt(2);
             for (int dx = -blobR; dx <= blobR; dx++) {
                 for (int dz = -blobR; dz <= blobR; dz++) {
                     if (dx * dx + dz * dz > blobR * blobR) continue;
