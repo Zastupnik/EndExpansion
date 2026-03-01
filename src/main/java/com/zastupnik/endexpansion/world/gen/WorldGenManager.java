@@ -13,11 +13,11 @@ public class WorldGenManager implements IWorldGenerator {
 
     public static final EndIslandGenerator islandGen = new EndIslandGenerator();
 
+    // Безопасная зона вокруг спавна дракона
     private static final int SAFE_ZONE = 1000;
 
-    // Реестр размещённых островов для проверки пересечений.
-    // Ключ: регион (128×128 блоков), значение: список [x, z, radius].
-    private static final Map<Long, List<int[]>> placedIslands = new HashMap<>();
+    // Минимальное расстояние между центрами кластеров (в чанках).
+    private static final int MIN_CLUSTER_SPACING_CHUNKS = 20;
 
     @Override
     public void generate(Random random, int chunkX, int chunkZ, World world,
@@ -28,133 +28,86 @@ public class WorldGenManager implements IWorldGenerator {
     }
 
     private void generateEnd(World world, int chunkX, int chunkZ) {
-        int blockX = chunkX * 16 + 8;
-        int blockZ = chunkZ * 16 + 8;
+        // ── Шаг 1: Определяем ячейку сетки для этого чанка ──────────────────────
+        // Разбиваем мир на ячейки MIN_CLUSTER_SPACING_CHUNKS×MIN_CLUSTER_SPACING_CHUNKS чанков.
+        // В каждой ячейке может быть максимум один кластер.
+        // Это гарантирует расстояние между кластерами БЕЗ runtime-реестра.
+        int spacing = MIN_CLUSTER_SPACING_CHUNKS;
+        int cellX = Math.floorDiv(chunkX, spacing);
+        int cellZ = Math.floorDiv(chunkZ, spacing);
 
+        // Этот чанк должен быть "хозяином" своей ячейки — то есть первым чанком в ней
+        int ownerChunkX = cellX * spacing;
+        int ownerChunkZ = cellZ * spacing;
+        if (chunkX != ownerChunkX || chunkZ != ownerChunkZ) return;
+
+        // ── Шаг 2: Детерминированный рандом для этой ячейки ─────────────────────
+        // Используем сид мира + координаты ячейки → результат одинаков при любом порядке загрузки
+        Random rand = new Random(world.getSeed()
+                ^ ((long) cellX * 341873128712L)
+                ^ ((long) cellZ * 132897987541L));
+
+        // ── Шаг 3: Редкость — только часть ячеек содержит острова ───────────────
+        // 1 из 4 ячеек → острова на ~25% территории, остальное — пустой Энд
+        if (rand.nextInt(4) != 0) return;
+
+        // ── Шаг 4: Позиция кластера внутри ячейки (случайно смещена) ────────────
+        int offsetX = rand.nextInt(spacing * 16); // случайный сдвиг в блоках внутри ячейки
+        int offsetZ = rand.nextInt(spacing * 16);
+        int blockX  = ownerChunkX * 16 + offsetX;
+        int blockZ  = ownerChunkZ * 16 + offsetZ;
+
+        // Безопасная зона вокруг спавна
         if (Math.abs(blockX) < SAFE_ZONE && Math.abs(blockZ) < SAFE_ZONE) return;
 
-        // Детерминированный рандом: одинаковый при любом порядке загрузки чанков
-        Random rand = new Random(world.getSeed()
-                ^ ((long) chunkX * 341873128712L)
-                ^ ((long) chunkZ * 132897987541L));
-
-        // Базовая частота: 1 из 60 чанков начинает кластер или одиночный остров.
-        // Реально редко — с учётом проверки пересечений ещё реже.
-        if (rand.nextInt(60) != 0) return;
-
+        // ── Шаг 5: Выбор биома с защитой от null ────────────────────────────────
         BiomeGenBase biome = selectBiome(rand);
+        if (biome == null) return; // EndBiomes ещё не проинициализированы — пропускаем
 
-        // 30% шанс — кластер (2–4 острова рядом), 70% — одиночный
-        if (rand.nextInt(10) < 3) {
-            generateCluster(world, rand, blockX, blockZ, biome);
-        } else {
-            tryPlaceIsland(world, rand, blockX, blockZ, biome);
-        }
-    }
-
-    // ===== КЛАСТЕР =====
-
-    /**
-     * Группа из 2–4 островов одного биома в радиусе 100–250 блоков.
-     * Между ними потенциально будут мосты (если DecoratorBridge будет добавлен).
-     */
-    private void generateCluster(World world, Random rand, int cx, int cz, BiomeGenBase biome) {
-        int count = 2 + rand.nextInt(3); // 2–4
-        int clusterRadius = 100 + rand.nextInt(150); // 100–250 блоков
-
-        List<int[]> clusterIslands = new ArrayList<>();
-
-        for (int i = 0; i < count; i++) {
-            float angle = rand.nextFloat() * (float)(Math.PI * 2);
-            float dist  = rand.nextFloat() * clusterRadius;
-            int ix = cx + (int)(Math.cos(angle) * dist);
-            int iz = cz + (int)(Math.sin(angle) * dist);
-
-            int[] placed = tryPlaceIsland(world, rand, ix, iz, biome);
-            if (placed != null) clusterIslands.add(placed);
-        }
-
-        // TODO: Мосты между clusterIslands (когда будет готов DecoratorBridge)
-        // buildBridges(world, rand, clusterIslands);
-    }
-
-    /**
-     * Пытается разместить один остров. Возвращает [x, z, radius] если успешно, null если нет.
-     */
-    private int[] tryPlaceIsland(World world, Random rand, int x, int z, BiomeGenBase biome) {
+        // ── Шаг 6: Размер и количество островов ─────────────────────────────────
         int radius = getRadius(biome, rand);
 
-        // Небольшое случайное смещение внутри чанка
-        x += rand.nextInt(32) - 16;
-        z += rand.nextInt(32) - 16;
+        // 30% — кластер 2–4 острова, 70% — одиночный
+        int islandCount = (rand.nextInt(10) < 3) ? (2 + rand.nextInt(3)) : 1;
 
-        int minGap = ConfigHandler.minIslandGap;
-        if (overlaps(x, z, radius, minGap)) return null;
-
-        registerIsland(x, z, radius);
-        islandGen.generateIsland(world, rand, x, z, biome, radius);
-        return new int[]{x, z, radius};
+        islandGen.generateCluster(world, rand, blockX, blockZ, biome, islandCount);
     }
 
-    // ===== ПРОВЕРКА ПЕРЕСЕЧЕНИЙ =====
-
-    private boolean overlaps(int x, int z, int radius, int minGap) {
-        int regionX = x >> 7;
-        int regionZ = z >> 7;
-
-        // Проверяем 5×5 соседних регионов — покрывает крупные острова
-        for (int rx = regionX - 2; rx <= regionX + 2; rx++) {
-            for (int rz = regionZ - 2; rz <= regionZ + 2; rz++) {
-                List<int[]> islands = placedIslands.get(regionKey(rx, rz));
-                if (islands == null) continue;
-                for (int[] island : islands) {
-                    int dx = island[0] - x;
-                    int dz = island[1] - z;
-                    int dist = (int)Math.sqrt(dx * dx + dz * dz);
-                    if (dist < island[2] + radius + minGap) return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private void registerIsland(int x, int z, int radius) {
-        long key = regionKey(x >> 7, z >> 7);
-        placedIslands.computeIfAbsent(key, k -> new ArrayList<>()).add(new int[]{x, z, radius});
-    }
-
-    private long regionKey(int rx, int rz) {
-        return ((long)(rx + 30000)) << 32 | ((rz + 30000) & 0xFFFFFFFFL);
-    }
-
-    // ===== БИОМЫ И РАЗМЕРЫ =====
+    // ===== БИОМЫ =====
 
     /**
-     * Радиус — это половина наименьшего измерения острова.
-     * Формы вытягиваются в generateShape через scaleX/scaleZ,
-     * поэтому реальный размер может быть 2–3× от radius.
-     * Пустыня 300×200 = radius ~100–150 при scaleX=2.0, scaleZ=1.3.
+     * Выбор биома с явной проверкой на null.
+     * Если EndBiomes не инициализированы — вернём null и пропустим генерацию.
      */
-    private int getRadius(BiomeGenBase biome, Random rand) {
-        if (biome == EndBiomes.biomeCemetery)  return 80  + rand.nextInt(120); // 80–200
-        if (biome == EndBiomes.biomeFortress)  return 60  + rand.nextInt(90);  // 60–150
-        if (biome == EndBiomes.biomeJungle)    return 50  + rand.nextInt(100); // 50–150
-        if (biome == EndBiomes.biomeForest)    return 40  + rand.nextInt(80);  // 40–120
-        if (biome == EndBiomes.biomeOcean)     return 60  + rand.nextInt(100); // 60–160
-        if (biome == EndBiomes.biomeDesert)    return 70  + rand.nextInt(130); // 70–200  ← большие пустыни
-        if (biome == EndBiomes.biomeInfection) return 25  + rand.nextInt(50);  // 25–75   ← маленькие жуткие
-        return 40 + rand.nextInt(60);
+    private BiomeGenBase selectBiome(Random rand) {
+        // Проверяем что хотя бы один биом инициализирован
+        if (EndBiomes.biomeForest == null) return null;
+
+        int roll = rand.nextInt(21);
+
+        // Веса: Forest=5, Jungle=4, Desert=4, Ocean=3, Cemetery=2, Infection=2, Fortress=1
+        if (roll < 5)  return safeBiome(EndBiomes.biomeForest,    EndBiomes.biomeDesert);
+        if (roll < 9)  return safeBiome(EndBiomes.biomeJungle,    EndBiomes.biomeForest);
+        if (roll < 13) return safeBiome(EndBiomes.biomeDesert,    EndBiomes.biomeForest);
+        if (roll < 16) return safeBiome(EndBiomes.biomeOcean,     EndBiomes.biomeForest);
+        if (roll < 18) return safeBiome(EndBiomes.biomeCemetery,  EndBiomes.biomeForest);
+        if (roll < 20) return safeBiome(EndBiomes.biomeInfection, EndBiomes.biomeForest);
+        return              safeBiome(EndBiomes.biomeFortress,  EndBiomes.biomeForest);
     }
 
-    private BiomeGenBase selectBiome(Random rand) {
-        // Веса: Forest=5, Jungle=4, Desert=4, Ocean=3, Cemetery=2, Infection=2, Fortress=1
-        int roll = rand.nextInt(21);
-        if (roll < 5)       return EndBiomes.biomeForest;
-        else if (roll < 9)  return EndBiomes.biomeJungle;
-        else if (roll < 13) return EndBiomes.biomeDesert;
-        else if (roll < 16) return EndBiomes.biomeOcean;
-        else if (roll < 18) return EndBiomes.biomeCemetery;
-        else if (roll < 20) return EndBiomes.biomeInfection;
-        else                return EndBiomes.biomeFortress;
+    /** Возвращает primary если не null, иначе fallback. */
+    private BiomeGenBase safeBiome(BiomeGenBase primary, BiomeGenBase fallback) {
+        return primary != null ? primary : fallback;
+    }
+
+    private int getRadius(BiomeGenBase biome, Random rand) {
+        if (biome == EndBiomes.biomeCemetery)  return 80  + rand.nextInt(121); // 80–200
+        if (biome == EndBiomes.biomeFortress)  return 60  + rand.nextInt(91);  // 60–150
+        if (biome == EndBiomes.biomeJungle)    return 50  + rand.nextInt(101); // 50–150
+        if (biome == EndBiomes.biomeForest)    return 40  + rand.nextInt(81);  // 40–120
+        if (biome == EndBiomes.biomeOcean)     return 60  + rand.nextInt(101); // 60–160
+        if (biome == EndBiomes.biomeDesert)    return 70  + rand.nextInt(131); // 70–200
+        if (biome == EndBiomes.biomeInfection) return 25  + rand.nextInt(51);  // 25–75
+        return 40 + rand.nextInt(61);
     }
 }

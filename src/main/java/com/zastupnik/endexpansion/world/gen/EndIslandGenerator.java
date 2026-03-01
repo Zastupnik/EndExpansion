@@ -9,25 +9,55 @@ import net.minecraft.init.Blocks;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.BiomeGenBase;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class EndIslandGenerator {
 
-    // ===== ТОЧКА ВХОДА =====
+    public List<IslandNode> generateCluster(World world, Random rand,
+                                            int cx, int cz, BiomeGenBase biome,
+                                            int islandCount) {
 
-    public void generateIsland(World world, Random rand, int x, int z, BiomeGenBase biome, int baseRadius) {
-        Block topBlock    = getTopBlock(biome);
-        Block fillerBlock = getFillerBlock(biome);
-        int y = getIslandY(rand); // 60–160 для всех биомов
+        List<IslandNode> nodes = new ArrayList<>();
+        int mainY = getIslandY(rand);
 
-        int thickness = pickThickness(rand); // 3–40 блоков высоты
+        for (int i = 0; i < islandCount; i++) {
+            int ox = cx, oz = cz, oy = mainY;
 
-        generateShape(world, rand, x, y, z, baseRadius, thickness, topBlock, fillerBlock, biome);
+            if (i > 0) {
+                float a    = rand.nextFloat() * (float)(Math.PI * 2);
+                int   dist = 60 + rand.nextInt(120); // 60–180 блоков между центрами
+                ox = cx + (int)(Math.cos(a) * dist);
+                oz = cz + (int)(Math.sin(a) * dist);
+                oy = mainY + rand.nextInt(21) - 10;  // ±10 по высоте
+            }
 
-        // Декор СТРОГО после блоков — иначе флора выпадает предметами
-        decorateIsland(world, rand, x, y, z, biome, baseRadius);
+            int radius    = 40 + rand.nextInt(141);   // 40–180
+            int thickness = pickThickness(rand);
 
-        if (rand.nextInt(3) != 0) spawnEndermen(world, rand, x, y, z, baseRadius);
+            Block top    = getTopBlock(biome);
+            Block filler = getFillerBlock(biome);
+
+            // ===== FIX: biome ставим ОДИН РАЗ на остров, а не на каждый блок =====
+            setBiomeAt(world, ox, oz, biome);
+
+            // ===== генерация =====
+            generateShape(world, rand, ox, oy, oz, radius, thickness, top, filler, biome);
+            decorateIsland(world, rand, ox, oy, oz, biome, radius);
+
+            if (rand.nextInt(3) != 0)
+                spawnEndermen(world, rand, ox, oy, oz, radius);
+
+            nodes.add(new IslandNode(ox, oy, oz, radius));
+        }
+
+        // ===== мосты =====
+        if (nodes.size() > 1) {
+            new DecoratorBridge().buildClusterBridges(world, rand, nodes);
+        }
+
+        return nodes;
     }
 
     // ===== БЛОКИ БИОМОВ =====
@@ -61,109 +91,172 @@ public class EndIslandGenerator {
     }
 
     /**
-     * Толщина острова вниз:
-     *  50% — тонкая плита (3–10): парящие камни, выглядит атмосферно
-     *  30% — средний (10–25)
-     *  20% — толстый (25–45): массивные острова
+     * Толщина острова снизу.
+     * Убрали совсем тонкие (3–10) — они выглядят как платформы.
+     * Теперь минимум 15, чаще 20–50.
      */
     private int pickThickness(Random rand) {
         int r = rand.nextInt(10);
-        if (r < 5) return 3  + rand.nextInt(8);  // 3–10
-        if (r < 8) return 10 + rand.nextInt(16); // 10–25
-        return 25 + rand.nextInt(21);             // 25–45
+        if (r < 3) return 15 + rand.nextInt(11); // 30% → 15–25  (тонкий, но не платформа)
+        if (r < 7) return 25 + rand.nextInt(21); // 40% → 25–45  (нормальный)
+        if (r < 9) return 45 + rand.nextInt(21); // 20% → 45–65  (толстый)
+        return 65 + rand.nextInt(26);             // 10% → 65–90  (массивный)
     }
 
     // ===== ВЫБОР ФОРМЫ =====
 
     private void generateShape(World world, Random rand, int cx, int cy, int cz,
-                               int baseRadius, int thickness,
-                               Block topBlock, Block fillerBlock, BiomeGenBase biome) {
+                               int R, int thickness,
+                               Block top, Block filler, BiomeGenBase biome) {
+
         int roll = rand.nextInt(12);
-        if      (roll < 2)  generateOval     (world, rand, cx, cy, cz, baseRadius, thickness, topBlock, fillerBlock, biome);
-        else if (roll < 4)  generateLShape   (world, rand, cx, cy, cz, baseRadius, thickness, topBlock, fillerBlock, biome);
-        else if (roll < 6)  generateCrescent (world, rand, cx, cy, cz, baseRadius, thickness, topBlock, fillerBlock, biome);
-        else if (roll < 8)  generateRidge    (world, rand, cx, cy, cz, baseRadius, thickness, topBlock, fillerBlock, biome);
-        else if (roll < 10) generateBlob     (world, rand, cx, cy, cz, baseRadius, thickness, topBlock, fillerBlock, biome);
-        else                generateComposite(world, rand, cx, cy, cz, baseRadius, thickness, topBlock, fillerBlock, biome);
+
+        boolean generated = false;
+
+        if (roll < 2) {
+            generateOval(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
+            generated = true;
+        }
+        else if (roll < 4) {
+            generateLShape(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
+            generated = true;
+        }
+        else if (roll < 6) {
+            generateCrescent(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
+            generated = true;
+        }
+        else if (roll < 8) {
+            generateRidge(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
+            generated = true;
+        }
+        else if (roll < 10) {
+            generateBlob(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
+            generated = true;
+        }
+        else {
+            generateComposite(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
+            generated = true;
+        }
+
+        // ===== FAILSAFE =====
+        // если какая-то форма ничего не сгенерила (баг внутри shape-методов)
+        if (!generated) {
+            generateBlob(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
+        }
     }
 
     // ===== ФОРМЫ =====
 
     /**
-     * Эллипс с рандомным соотношением сторон и поворотом.
-     * scaleX/Z от 0.5 до 2.5 → можно получить 300×120 из радиуса 150.
+     * Эллипс с произвольным соотношением сторон и поворотом.
+     * Нижняя часть сужается медленно — остров выглядит как каплевидная скала.
      */
     private void generateOval(World world, Random rand, int cx, int cy, int cz,
-                              int R, int thickness,
-                              Block top, Block filler, BiomeGenBase biome) {
-        float scaleX = 0.5F + rand.nextFloat() * 2.0F;
-        float scaleZ = 0.5F + rand.nextFloat() * 2.0F;
+                              int R, int thickness, Block top, Block filler, BiomeGenBase biome) {
+        float scaleX = 1.0F + rand.nextFloat() * 2.5F;
+        float scaleZ = 1.0F + rand.nextFloat() * 2.5F;
         float angle  = rand.nextFloat() * (float)Math.PI;
         float cosA   = (float)Math.cos(angle);
         float sinA   = (float)Math.sin(angle);
+        float[] noise = buildNoise(rand, 64);
 
         int extX = (int)(R * scaleX + 2);
         int extZ = (int)(R * scaleZ + 2);
 
         for (int dy = 0; dy < thickness; dy++) {
-            float shrink = 1.0F - (float)dy / thickness * 0.85F;
-            float rx = R * scaleX * shrink;
-            float rz = R * scaleZ * shrink;
+            // Верхняя треть — полный размер. Потом медленно сужается.
+            float t      = Math.max(0, (float)(dy - thickness / 3) / (thickness * 0.67F));
+            float shrink = 1.0F - t * 0.75F; // до 75% сужения к низу
+            float rx     = R * scaleX * shrink;
+            float rz     = R * scaleZ * shrink;
             if (rx < 1 || rz < 1) break;
 
             for (int dx = -extX; dx <= extX; dx++) {
                 for (int dz = -extZ; dz <= extZ; dz++) {
-                    float lx =  dx * cosA + dz * sinA;
-                    float lz = -dx * sinA + dz * cosA;
+                    float lx    =  dx * cosA + dz * sinA;
+                    float lz    = -dx * sinA + dz * cosA;
                     float check = (lx * lx) / (rx * rx) + (lz * lz) / (rz * rz);
                     if (check > 1.0F) continue;
-                    if (check > 0.82F && rand.nextFloat() < (check - 0.82F) * 5F) continue;
-                    placeBlock(world, cx + dx, cy - dy, cz + dz, dy == 0 ? top : filler, dy == 0, biome);
+                    if (check > 0.80F) {
+                        float n = noise[((dx & 7) << 3 | (dz & 7)) & 63];
+                        if (n < (check - 0.80F) * 5F) continue;
+                    }
+                    placeBlock(world, cx+dx, cy-dy, cz+dz, pickBody(top, filler, dy, thickness, dx, dz), dy==0, biome);
                 }
             }
         }
-        if (biome == EndBiomes.biomeOcean) fillOceanBasin(world, rand, cx, cy, cz, (int)(R * Math.min(scaleX, scaleZ) * 0.5F));
+        if (biome == EndBiomes.biomeOcean)
+            fillOceanBasin(world, rand, cx, cy, cz, (int)(R * Math.min(scaleX, scaleZ) * 0.5F));
     }
 
     /**
-     * Г-образный остров. Два прямоугольных плеча с рваными краями.
+     * Г-образный остров со скруглёнными углами (superellipse).
      */
     private void generateLShape(World world, Random rand, int cx, int cy, int cz,
-                                int R, int thickness,
-                                Block top, Block filler, BiomeGenBase biome) {
+                                int R, int thickness, Block top, Block filler, BiomeGenBase biome) {
+
+        // === FAILSAFE ===
+        if (R < 8) R = 8;
+        if (thickness < 6) thickness = 6;
+
         float angle = rand.nextFloat() * (float)(Math.PI * 2);
         float cosA  = (float)Math.cos(angle);
         float sinA  = (float)Math.sin(angle);
 
-        // Плечо 1 — длинное горизонтальное
-        float arm1HalfLen = R * (1.0F + rand.nextFloat() * 1.0F); // R–2R
-        float arm1HalfWid = R * (0.3F + rand.nextFloat() * 0.3F); // 0.3R–0.6R
+        float arm1Len = R * (1.0F + rand.nextFloat());
+        float arm1Wid = R * (0.35F + rand.nextFloat() * 0.3F);
+        float arm2Len = R * (0.7F + rand.nextFloat() * 0.8F);
+        float arm2Wid = R * (0.35F + rand.nextFloat() * 0.3F);
 
-        // Плечо 2 — перпендикулярное, начинается с одного конца плеча 1
-        float arm2HalfLen = R * (0.6F + rand.nextFloat() * 0.8F);
-        float arm2HalfWid = R * (0.3F + rand.nextFloat() * 0.3F);
-        // Смещение центра плеча 2 вдоль плеча 1 и поперёк
-        float arm2OffAlong = arm1HalfLen - arm2HalfWid;
-        float arm2OffPerp  = arm2HalfLen;
+        float offAlong = arm1Len - arm2Wid;
+        float offPerp  = arm2Len;
+
+        float[] noise  = buildNoise(rand, 64);
+        int ext = (int)(arm1Len + arm2Len + 4);
+        if (ext < 4) ext = 4;
+
+        boolean placedAny = false;
 
         for (int dy = 0; dy < thickness; dy++) {
-            float s = 1.0F - (float)dy / thickness * 0.8F;
+            float t = Math.max(0, (float)(dy - thickness / 3) / (thickness * 0.67F));
+            float s = 1.0F - t * 0.75F;
+            if (s < 0.15F) s = 0.15F;
 
-            int ext = (int)(Math.max(arm1HalfLen, arm2OffAlong + arm2HalfWid) + 4);
             for (int dx = -ext; dx <= ext; dx++) {
                 for (int dz = -ext; dz <= ext; dz++) {
-                    // Переходим в локальную систему (вдоль, поперёк)
-                    float along =  dx * cosA + dz * sinA;
+                    float along = dx * cosA + dz * sinA;
                     float perp  = -dx * sinA + dz * cosA;
 
-                    boolean inArm1 = Math.abs(along) < arm1HalfLen * s && Math.abs(perp) < arm1HalfWid * s;
-                    boolean inArm2 = Math.abs(along - arm2OffAlong * s) < arm2HalfWid * s
-                            && Math.abs(perp  - arm2OffPerp  * s) < arm2HalfLen * s;
+                    float d1 = softRect(along, perp, arm1Len * s, arm1Wid * s);
+                    float d2 = softRect(along - offAlong * s, perp - offPerp * s, arm2Wid * s, arm2Len * s);
+                    float closest = Math.min(d1, d2);
+                    if (closest > 1.0F) continue;
 
-                    if (!inArm1 && !inArm2) continue;
-                    if (rand.nextInt(10) == 0) continue; // Рваные края
+                    // шумовой край
+                    if (closest > 0.80F) {
+                        float n = noise[((dx & 7) << 3 | (dz & 7)) & 63];
+                        if (n < (closest - 0.80F) * 5F) continue;
+                    }
 
-                    placeBlock(world, cx + dx, cy - dy, cz + dz, dy == 0 ? top : filler, dy == 0, biome);
+                    placeBlock(world, cx + dx, cy - dy, cz + dz,
+                            pickBody(top, filler, dy, thickness, dx, dz),
+                            dy == 0, biome);
+
+                    placedAny = true;
+                }
+            }
+        }
+
+        // === FAILSAFE: если L-образная форма не сгенерировалась ===
+        if (!placedAny) {
+            int rr = Math.max(6, R / 2);
+            for (int dx = -rr; dx <= rr; dx++) {
+                for (int dz = -rr; dz <= rr; dz++) {
+                    if (Math.abs(dx) + Math.abs(dz) <= rr) {
+                        for (int dy = 0; dy < Math.max(6, thickness / 2); dy++) {
+                            placeBlock(world, cx+dx, cy-dy, cz+dz, filler, dy==0, biome);
+                        }
+                    }
                 }
             }
         }
@@ -173,173 +266,277 @@ public class EndIslandGenerator {
      * Полумесяц / дуга.
      */
     private void generateCrescent(World world, Random rand, int cx, int cy, int cz,
-                                  int R, int thickness,
-                                  Block top, Block filler, BiomeGenBase biome) {
+                                  int R, int thickness, Block top, Block filler, BiomeGenBase biome) {
+
+        if (R < 8) R = 8;
+        if (thickness < 6) thickness = 6;
+
         float outerR   = R * (1.0F + rand.nextFloat() * 0.5F);
         float innerR   = outerR * (0.35F + rand.nextFloat() * 0.3F);
         float cutAngle = rand.nextFloat() * (float)(Math.PI * 2);
         float cutArc   = (float)Math.PI * (0.4F + rand.nextFloat() * 0.7F);
-
+        float[] noise  = buildNoise(rand, 64);
         int ext = (int)(outerR + 2);
+        if (ext < 4) ext = 4;
+
+        boolean placedAny = false;
 
         for (int dy = 0; dy < thickness; dy++) {
-            float s = 1.0F - (float)dy / thickness * 0.8F;
+            float t   = Math.max(0, (float)(dy - thickness / 3) / (thickness * 0.67F));
+            float s   = Math.max(0.15F, 1.0F - t * 0.75F);
             float orS = outerR * s;
             float irS = innerR * s;
+            float orSSq = orS * orS; // квадрат радиуса для проверки без sqrt
 
             for (int dx = -ext; dx <= ext; dx++) {
                 for (int dz = -ext; dz <= ext; dz++) {
-                    float dist  = (float)Math.sqrt(dx * dx + dz * dz);
-                    if (dist > orS) continue;
 
-                    float ang = (float)Math.atan2(dz, dx);
+                    float distSq = dx*dx + dz*dz;
+                    if (distSq > orSSq) continue; // быстрее чем sqrt
+
+                    float ang  = (float)Math.atan2(dz, dx);
                     float diff = Math.abs(ang - cutAngle);
-                    if (diff > Math.PI) diff = (float)(Math.PI * 2) - diff;
+                    if (diff > Math.PI) diff = (float)(Math.PI*2) - diff;
+                    if (diff < cutArc/2 && distSq > irS*irS) continue;
 
-                    if (diff < cutArc / 2 && dist > irS) continue;
+                    float edge = (float)Math.sqrt(distSq) / orS;
+                    if (edge > 0.80F) {
+                        float n = noise[((dx & 7) << 3 | (dz & 7)) & 63];
+                        if (n < (edge - 0.80F) * 5F) continue;
+                    }
 
-                    float edge = dist / orS;
-                    if (edge > 0.82F && rand.nextFloat() < (edge - 0.82F) * 5F) continue;
+                    placeBlock(world, cx+dx, cy-dy, cz+dz,
+                            pickBody(top, filler, dy, thickness, dx, dz),
+                            dy==0, biome);
+                    placedAny = true;
+                }
+            }
+        }
 
-                    placeBlock(world, cx + dx, cy - dy, cz + dz, dy == 0 ? top : filler, dy == 0, biome);
+        // fail-safe только если не поставилось ни одного блока
+        if (!placedAny) {
+            int rr = Math.max(6, R / 2);
+            for (int dx=-rr; dx<=rr; dx++) {
+                for (int dz=-rr; dz<=rr; dz++) {
+                    if (dx*dx + dz*dz <= rr*rr) {
+                        for (int dy=0; dy<Math.max(6, thickness/2); dy++) {
+                            placeBlock(world, cx+dx, cy-dy, cz+dz, filler, dy==0, biome);
+                        }
+                    }
                 }
             }
         }
     }
 
     /**
-     * Хребет — длинный вытянутый остров с волнистым Y-профилем и переменной шириной.
+     * Хребет с волнистым Y-профилем.
      */
     private void generateRidge(World world, Random rand, int cx, int cy, int cz,
-                               int R, int thickness,
-                               Block top, Block filler, BiomeGenBase biome) {
-        float angle = rand.nextFloat() * (float)Math.PI;
-        float cosA  = (float)Math.cos(angle);
-        float sinA  = (float)Math.sin(angle);
-
-        int   length = (int)(R * (1.5F + rand.nextFloat() * 1.5F)); // 1.5R–3R
-        float width  = R * (0.15F + rand.nextFloat() * 0.25F);       // Узкий
+                               int R, int thickness, Block top, Block filler, BiomeGenBase biome) {
+        float angle  = rand.nextFloat() * (float)Math.PI;
+        float cosA   = (float)Math.cos(angle);
+        float sinA   = (float)Math.sin(angle);
+        int   length = (int)(R * (1.5F + rand.nextFloat() * 1.5F));
+        float width  = R * (0.2F + rand.nextFloat() * 0.3F);
 
         for (int step = -length; step <= length; step++) {
-            float t = (float)step / length; // -1..1
-
-            // Y волнится вдоль хребта
-            int yOff = (int)(Math.sin(t * Math.PI * (1 + rand.nextInt(3))) * thickness * 0.35F);
-            // Ширина в этой точке — уже к краям
-            float localW = width * (1.0F - Math.abs(t) * 0.5F) * (0.7F + rand.nextFloat() * 0.6F);
-            // Толщина тоже волнится
-            int localThick = Math.max(2, (int)(thickness * (0.6F + Math.cos(t * Math.PI * 2) * 0.4F)));
+            float t      = (float)step / length;
+            int   yOff   = (int)(Math.sin(t * Math.PI * (1 + (step & 2))) * thickness * 0.25F);
+            float localW = width * (1.0F - Math.abs(t) * 0.4F);
+            int localThick = Math.max(10, (int)(thickness * (0.7F + Math.cos(t * Math.PI * 2) * 0.3F)));
 
             int segX = cx + (int)(step * cosA);
             int segZ = cz + (int)(step * sinA);
 
             for (int w = -(int)localW; w <= (int)localW; w++) {
-                int px = segX + (int)(-w * sinA);
-                int pz = segZ + (int)( w * cosA);
+                int   px   = segX + (int)(-w * sinA);
+                int   pz   = segZ + (int)( w * cosA);
                 float edge = Math.abs((float)w / Math.max(1, localW));
 
                 for (int dy = 0; dy < localThick; dy++) {
-                    if (edge > 0.8F && rand.nextFloat() < (edge - 0.8F) * 4F) continue;
+                    if (edge > 0.80F && (((px ^ pz ^ dy) & 3) < (int)((edge-0.80F)*16))) continue;
                     int ry = cy - dy + yOff;
-                    placeBlock(world, px, ry, pz, dy == 0 ? top : filler, dy == 0, biome);
+                    placeBlock(world, px, ry, pz, pickBody(top, filler, dy, localThick, px, pz), dy==0, biome);
                 }
             }
         }
     }
 
     /**
-     * Blob: несколько перекрывающихся кругов = органичная неправильная форма.
+     * Blob: органичная форма из нескольких перекрывающихся кругов.
+     * Ограничиваем ext чтобы не убить ТПС.
      */
     private void generateBlob(World world, Random rand, int cx, int cy, int cz,
-                              int R, int thickness,
-                              Block top, Block filler, BiomeGenBase biome) {
-        int count = 4 + rand.nextInt(6); // 4–9 кругов
-        int[] bx = new int[count];
-        int[] bz = new int[count];
-        int[] br = new int[count];
+                              int R, int thickness, Block top, Block filler, BiomeGenBase biome) {
 
-        bx[0] = 0; bz[0] = 0;
-        br[0] = (int)(R * (0.5F + rand.nextFloat() * 0.5F));
+        if (R < 6) R = 6;
+        if (thickness < 4) thickness = 4;
 
-        for (int i = 1; i < count; i++) {
-            float a = rand.nextFloat() * (float)(Math.PI * 2);
-            float d = br[i-1] * (0.4F + rand.nextFloat() * 0.8F);
-            bx[i] = bx[i-1] + (int)(Math.cos(a) * d);
-            bz[i] = bz[i-1] + (int)(Math.sin(a) * d);
-            br[i] = (int)(R * (0.25F + rand.nextFloat() * 0.5F));
+        int count = 4 + rand.nextInt(5);
+        int[] bx  = new int[count];
+        int[] bz  = new int[count];
+        int[] br  = new int[count];
+
+        bx[0] = 0; bz[0] = 0; br[0] = Math.max(3, (int)(R*(0.5F + rand.nextFloat()*0.5F)));
+        int maxExtent = br[0];
+
+        for (int i=1;i<count;i++) {
+            float a = rand.nextFloat() * (float)Math.PI*2;
+            float d = Math.max(2, br[i-1]*(0.4F + rand.nextFloat()*0.7F));
+            bx[i] = bx[i-1] + (int)(Math.cos(a)*d);
+            bz[i] = bz[i-1] + (int)(Math.sin(a)*d);
+            br[i] = Math.max(2, (int)(R*(0.3F + rand.nextFloat()*0.4F)));
+            maxExtent = Math.max(maxExtent, Math.abs(bx[i])+br[i]);
+            maxExtent = Math.max(maxExtent, Math.abs(bz[i])+br[i]);
         }
 
-        int ext = R * 3;
-        for (int dy = 0; dy < thickness; dy++) {
-            float s = 1.0F - (float)dy / thickness * 0.85F;
+        maxExtent = Math.min(maxExtent+4, R*2+4);
+        float[] noise = buildNoise(rand, 64);
+        boolean placedAny = false;
 
-            for (int dx = -ext; dx <= ext; dx++) {
-                for (int dz = -ext; dz <= ext; dz++) {
+        for (int dy=0; dy<thickness; dy++) {
+            float t = Math.max(0, (float)(dy - thickness/3)/(thickness*0.67F));
+            float s = 1.0F - t*0.75F;
+
+            for (int dx=-maxExtent; dx<=maxExtent; dx++) {
+                for (int dz=-maxExtent; dz<=maxExtent; dz++) {
+
                     float minEdge = 2.0F;
-                    for (int i = 0; i < count; i++) {
-                        float r = br[i] * s;
-                        if (r < 1) continue;
-                        int ddx = dx - bx[i], ddz = dz - bz[i];
-                        float dist = (float)Math.sqrt(ddx * ddx + ddz * ddz);
-                        if (dist < r) minEdge = Math.min(minEdge, dist / r);
+                    for (int i=0;i<count;i++) {
+                        float r = br[i]*s;
+                        if (r<1) continue;
+                        int ddx = dx-bx[i], ddz = dz-bz[i];
+                        float distSq = ddx*ddx + ddz*ddz;
+                        if (distSq < r*r) minEdge = Math.min(minEdge, (float)Math.sqrt(distSq)/r);
                     }
-                    if (minEdge > 1.0F) continue;
-                    if (minEdge > 0.82F && rand.nextFloat() < (minEdge - 0.82F) * 5F) continue;
-                    placeBlock(world, cx + dx, cy - dy, cz + dz, dy == 0 ? top : filler, dy == 0, biome);
+
+                    if (minEdge>1.0F) continue;
+                    if (minEdge>0.80F && noise[((dx &7)<<3 | (dz &7))&63] < (minEdge-0.80F)*5F) continue;
+
+                    placeBlock(world, cx+dx, cy-dy, cz+dz,
+                            pickBody(top, filler, dy, thickness, dx, dz),
+                            dy==0, biome);
+                    placedAny = true;
                 }
             }
         }
-        if (biome == EndBiomes.biomeOcean) fillOceanBasin(world, rand, cx, cy, cz, R / 2);
+
+        if (!placedAny) {
+            int rr = Math.max(6, R/2);
+            for (int dx=-rr; dx<=rr; dx++)
+                for (int dz=-rr; dz<=rr; dz++)
+                    if (dx*dx + dz*dz <= rr*rr)
+                        for (int dy=0; dy<Math.max(4, thickness/2); dy++)
+                            placeBlock(world, cx+dx, cy-dy, cz+dz, filler, dy==0, biome);
+        }
+
+        if (biome == EndBiomes.biomeOcean) fillOceanBasin(world, rand, cx, cy, cz, R/2);
     }
 
     /**
-     * Составной: blob + ridge с небольшим смещением и разной высотой.
-     * Дают самые интересные силуэты типа Г, Т, S.
+     * Составной: blob + ridge/blob с разной высотой.
      */
     private void generateComposite(World world, Random rand, int cx, int cy, int cz,
-                                   int R, int thickness,
-                                   Block top, Block filler, BiomeGenBase biome) {
-        // Часть 1 — blob
+                                   int R, int thickness, Block top, Block filler, BiomeGenBase biome) {
+
+        // === Первая часть (основа) ===
         int r1 = (int)(R * (0.6F + rand.nextFloat() * 0.4F));
+
+        // failsafe на радиус
+        if (r1 < 6) r1 = 6;
+
         generateBlob(world, rand, cx, cy, cz, r1, thickness, top, filler, biome);
 
-        // Часть 2 — ridge или ещё один blob, со смещением
-        float a  = rand.nextFloat() * (float)(Math.PI * 2);
-        int off  = (int)(r1 * (0.4F + rand.nextFloat() * 0.6F));
-        int cx2  = cx + (int)(Math.cos(a) * off);
-        int cz2  = cz + (int)(Math.sin(a) * off);
-        int r2   = (int)(R * (0.4F + rand.nextFloat() * 0.5F));
-        int t2   = Math.max(3, thickness - rand.nextInt(Math.max(1, thickness / 3)));
-        int yOff = rand.nextInt(15) - 7; // Вторая часть может быть на другой высоте
+        // === Вторая часть (пристыковка) ===
+        float a   = rand.nextFloat() * (float)(Math.PI * 2);
+        int off   = (int)(r1 * (0.4F + rand.nextFloat() * 0.5F));
 
-        if (rand.nextBoolean()) {
+        // failsafe на смещение
+        if (off < 4) off = 4;
+
+        int cx2   = cx + (int)(Math.cos(a) * off);
+        int cz2   = cz + (int)(Math.sin(a) * off);
+
+        int r2    = (int)(R * (0.4F + rand.nextFloat() * 0.4F));
+        if (r2 < 5) r2 = 5;
+
+        int t2    = Math.max(15, thickness - rand.nextInt(Math.max(1, thickness / 3)));
+        int yOff  = rand.nextInt(16) - 8;
+
+        boolean ridge = rand.nextBoolean();
+
+        if (ridge) {
             generateRidge(world, rand, cx2, cy + yOff, cz2, r2, t2, top, filler, biome);
         } else {
             generateBlob(world, rand, cx2, cy + yOff, cz2, r2, t2, top, filler, biome);
         }
+
+        // === FAILSAFE ===
+        // если вдруг обе формы "ничего не нарисовали" из-за внутренних условий
+        // гарантированно создаём ядро
+        if (r1 <= 6 && r2 <= 5) {
+            generateBlob(world, rand, cx, cy, cz, Math.max(10, R / 3), thickness, top, filler, biome);
+        }
     }
 
-    // ===== УТИЛИТЫ СЛОЁВ =====
+    // ===== ВЫБОР БЛОКА ДЛЯ ТЕЛА =====
+
+    /**
+     * Поверхность — topBlock.
+     * Нижние 3 слоя — всегда end_stone (натуральное основание).
+     * Внутри — filler с редкими жилами end_stone.
+     */
+    private Block pickBody(Block top, Block filler, int dy, int thickness, int dx, int dz) {
+        if (dy == 0) return top;
+        if (dy >= thickness - 3) return Blocks.end_stone;
+        // Жилы эндерняка внутри — через XOR-хэш (без вызова Random)
+        if (dy > 2 && ((dx * 3 ^ dz * 7 ^ dy * 13) & 15) == 0) return Blocks.end_stone;
+        return filler;
+    }
+
+    // ===== УТИЛИТЫ =====
+
+    /**
+     * Superellipse distance — скруглённый прямоугольник без острых углов.
+     * Степень 4: углы скруглены, но форма не становится кругом.
+     */
+    private float softRect(float x, float z, float hw, float hh) {
+        if (hw < 1 || hh < 1) return 2.0F;
+        double nx = x / hw, nz = z / hh;
+        return (float)Math.pow(Math.pow(Math.abs(nx), 4) + Math.pow(Math.abs(nz), 4), 0.25);
+    }
+
+    /** Предвычисленный шум для рваных краёв — экономим вызовы Random. */
+    private float[] buildNoise(Random rand, int size) {
+        float[] n = new float[size];
+        for (int i = 0; i < size; i++) n[i] = rand.nextFloat();
+        return n;
+    }
 
     private void placeBlock(World world, int x, int y, int z, Block block, boolean isTop, BiomeGenBase biome) {
-        world.setBlock(x, y, z, block, 0, 2);
-        if (isTop) setBiomeAt(world, x, z, biome);
+        world.setBlock(x, y, z, block, 0, 0);
+    }
+
+    private void setBiomeAt(World world, int x, int z, BiomeGenBase biome) {
+        try {
+            net.minecraft.world.chunk.Chunk chunk = world.getChunkFromBlockCoords(x, z);
+            chunk.getBiomeArray()[(z & 15) << 4 | (x & 15)] = (byte) biome.biomeID;
+        } catch (Exception ignored) {}
     }
 
     // ===== ОКЕАН =====
 
     private void fillOceanBasin(World world, Random rand, int cx, int cy, int cz, int radius) {
         int r = Math.max(4, radius);
-        int waterLevel = cy - 1;
-        int depth = 4 + rand.nextInt(4);
+        int wl = cy - 1, depth = 4 + rand.nextInt(4);
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
-                if (dx * dx + dz * dz <= r * r) {
+                if (dx*dx + dz*dz <= r*r) {
                     for (int dy = 0; dy < depth; dy++)
-                        world.setBlock(cx + dx, waterLevel - dy, cz + dz, Blocks.air, 0, 2);
-                    for (int dy = 0; dy < depth - 1; dy++)
-                        if (world.isAirBlock(cx + dx, waterLevel - dy, cz + dz))
-                            world.setBlock(cx + dx, waterLevel - dy, cz + dz, Blocks.water, 0, 2);
+                        world.setBlock(cx+dx, wl-dy, cz+dz, Blocks.air, 0, 2);
+                    for (int dy = 0; dy < depth-1; dy++)
+                        if (world.isAirBlock(cx+dx, wl-dy, cz+dz))
+                            world.setBlock(cx+dx, wl-dy, cz+dz, Blocks.water, 0, 2);
                 }
             }
         }
@@ -377,36 +574,34 @@ public class EndIslandGenerator {
         }
     }
 
-    // ===== ДЕРЕВЬЯ (публичные — используются декораторами) =====
+    // ===== ДЕРЕВЬЯ (публичные — для декораторов) =====
 
     public void generateGnarledTree(World world, Random rand, int x, int y, int z) {
         int height = 10 + rand.nextInt(8);
         int sx = x, sz = z;
         for (int i = 0; i < height; i++) {
-            world.setBlock(sx, y + i, sz, EndExpansion.ancientLog, 0, 2);
+            world.setBlock(sx, y+i, sz, EndExpansion.ancientLog, 0, 2);
             if (i > 3 && rand.nextInt(4) == 0) { sx += rand.nextInt(3)-1; sz += rand.nextInt(3)-1; }
         }
-        for (int bx = -1; bx <= 1; bx++)
-            for (int bz = -1; bz <= 1; bz++)
-                if (rand.nextInt(3) != 0) world.setBlock(x+bx, y, z+bz, EndExpansion.ancientLog, 0, 2);
-
-        int branchCount = 3 + rand.nextInt(3);
-        for (int b = 0; b < branchCount; b++) {
-            int branchY = y + height/2 + rand.nextInt(height/2);
-            int bdx = rand.nextInt(3)-1, bdz = rand.nextInt(3)-1;
-            int blen = 3 + rand.nextInt(4);
+        for (int bx=-1; bx<=1; bx++)
+            for (int bz=-1; bz<=1; bz++)
+                if (rand.nextInt(3)!=0) world.setBlock(x+bx, y, z+bz, EndExpansion.ancientLog, 0, 2);
+        int bc = 3 + rand.nextInt(3);
+        for (int b = 0; b < bc; b++) {
+            int by = y + height/2 + rand.nextInt(height/2);
+            int bdx = rand.nextInt(3)-1, bdz = rand.nextInt(3)-1, blen = 3+rand.nextInt(4);
             int bx = sx, bz = sz;
-            for (int bl = 0; bl < blen; bl++) {
+            for (int bl=0; bl<blen; bl++) {
                 bx += bdx; bz += bdz;
-                world.setBlock(bx, branchY + (bl > blen/2 ? 1 : 0), bz, EndExpansion.ancientLog, 0, 2);
+                world.setBlock(bx, by+(bl>blen/2?1:0), bz, EndExpansion.ancientLog, 0, 2);
             }
             for (int lx=-2; lx<=2; lx++) for (int lz=-2; lz<=2; lz++) for (int ly=-1; ly<=2; ly++)
-                if (lx*lx+lz*lz+ly*ly <= 6 && world.isAirBlock(bx+lx, branchY+ly, bz+lz))
-                    world.setBlock(bx+lx, branchY+ly, bz+lz, EndExpansion.ancientLeaves, 0, 2);
+                if (lx*lx+lz*lz+ly*ly<=6 && world.isAirBlock(bx+lx, by+ly, bz+lz))
+                    world.setBlock(bx+lx, by+ly, bz+lz, EndExpansion.ancientLeaves, 0, 2);
         }
         for (int lx=-3; lx<=3; lx++) for (int lz=-3; lz<=3; lz++) for (int ly=-1; ly<=3; ly++) {
-            float d = lx*lx + lz*lz + ly*ly*0.5F;
-            if (d <= 10 && rand.nextInt(4) != 0 && world.isAirBlock(sx+lx, y+height+ly, sz+lz))
+            float d = lx*lx+lz*lz+ly*ly*0.5F;
+            if (d<=10 && rand.nextInt(4)!=0 && world.isAirBlock(sx+lx, y+height+ly, sz+lz))
                 world.setBlock(sx+lx, y+height+ly, sz+lz, EndExpansion.ancientLeaves, 0, 2);
         }
     }
@@ -416,16 +611,16 @@ public class EndIslandGenerator {
         for (int i = 0; i < height; i++) {
             world.setBlock(x, y+i, z, EndExpansion.tropicalLog, 0, 2);
             if (height > 14) {
-                world.setBlock(x+1, y+i, z,   EndExpansion.tropicalLog, 0, 2);
-                world.setBlock(x,   y+i, z+1, EndExpansion.tropicalLog, 0, 2);
+                world.setBlock(x+1, y+i, z, EndExpansion.tropicalLog, 0, 2);
+                world.setBlock(x, y+i, z+1, EndExpansion.tropicalLog, 0, 2);
                 world.setBlock(x+1, y+i, z+1, EndExpansion.tropicalLog, 0, 2);
             }
         }
         int cr = 4 + rand.nextInt(3);
         for (int lx=-cr; lx<=cr; lx++) for (int lz=-cr; lz<=cr; lz++) for (int ly=-1; ly<=2; ly++) {
-            float d = lx*lx + lz*lz;
-            float maxR = (cr-Math.abs(ly))*(cr-Math.abs(ly));
-            if (d <= maxR && rand.nextInt(5)!=0 && world.isAirBlock(x+lx, y+height+ly, z+lz))
+            float d = lx*lx+lz*lz;
+            float mR = (cr-Math.abs(ly))*(cr-Math.abs(ly));
+            if (d<=mR && rand.nextInt(5)!=0 && world.isAirBlock(x+lx, y+height+ly, z+lz))
                 world.setBlock(x+lx, y+height+ly, z+lz, EndExpansion.tropicalLeaves, 0, 2);
         }
     }
@@ -434,16 +629,16 @@ public class EndIslandGenerator {
         int height = 5 + rand.nextInt(4);
         for (int i = 0; i < height; i++) world.setBlock(x, y+i, z, log, 0, 2);
         for (int lx=-2; lx<=2; lx++) for (int lz=-2; lz<=2; lz++) for (int ly=height-2; ly<=height+1; ly++)
-            if (Math.abs(lx)+Math.abs(lz) <= 3 && world.isAirBlock(x+lx, y+ly, z+lz))
+            if (Math.abs(lx)+Math.abs(lz)<=3 && world.isAirBlock(x+lx, y+ly, z+lz))
                 world.setBlock(x+lx, y+ly, z+lz, leaves, 0, 2);
     }
 
-    // ===== УТИЛИТЫ =====
+    // ===== DATA CLASS =====
 
-    private void setBiomeAt(World world, int x, int z, BiomeGenBase biome) {
-        try {
-            net.minecraft.world.chunk.Chunk chunk = world.getChunkFromBlockCoords(x, z);
-            chunk.getBiomeArray()[(z & 15) << 4 | (x & 15)] = (byte) biome.biomeID;
-        } catch (Exception ignored) {}
+    public static class IslandNode {
+        public final int x, y, z, radius;
+        public IslandNode(int x, int y, int z, int radius) {
+            this.x = x; this.y = y; this.z = z; this.radius = radius;
+        }
     }
 }

@@ -1,37 +1,22 @@
 package com.zastupnik.endexpansion.items;
 
-import com.zastupnik.endexpansion.EndExpansion;
 import net.minecraft.item.ItemFood;
-import net.minecraft.item.ItemStack;
-import net.minecraft.potion.Potion;
-import net.minecraft.potion.PotionEffect;
-import net.minecraft.world.World;
-import net.minecraft.entity.player.EntityPlayer;
 
+/**
+ * Базовая еда Энда.
+ * healAmount  — сколько восстанавливает (в половинках сердец голода, 1 = полкуска)
+ * saturation  — модификатор насыщения (0.0 = нет, 1.0 = высокое, 2.4 = как золотое яблоко)
+ */
 public class ItemEndFood extends ItemFood {
 
-    private int potionId;
-    private int duration;
-
-    public ItemEndFood(String name, int amount, float saturation, boolean isWolfFood) {
-        super(amount, saturation, isWolfFood);
-        this.setUnlocalizedName(name);
-        this.setTextureName("endexpansion:" + name);
-        this.setCreativeTab(EndExpansion.tabEndExpansion);
+    public ItemEndFood(int healAmount, float saturation) {
+        super(healAmount, saturation, false); // false = не волчья еда
+        setMaxStackSize(64);
     }
 
-    // Метод для добавления эффектов при поедании
-    public ItemEndFood setEffect(int id, int seconds) {
-        this.potionId = id;
-        this.duration = seconds * 20; // В тиках
+    /** Для еды которую едят из миски (стакфится только на 1, как суп). */
+    public ItemEndFood asBowlFood() {
+        setMaxStackSize(1);
         return this;
-    }
-
-    @Override
-    protected void onFoodEaten(ItemStack stack, World world, EntityPlayer player) {
-        super.onFoodEaten(stack, world, player);
-        if (!world.isRemote && potionId > 0) {
-            player.addPotionEffect(new PotionEffect(potionId, duration, 0));
-        }
     }
 }
