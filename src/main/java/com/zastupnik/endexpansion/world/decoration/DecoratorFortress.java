@@ -19,10 +19,13 @@ public class DecoratorFortress implements IEndBiomeDecorator {
 
         // Крепость строится от центра острова
         int y = world.getTopSolidOrLiquidBlock(centerX, centerZ);
+        terraformCourtyard(world, centerX, y, centerZ, Math.max(16, radius - 14));
 
         // 1. Внешние стены с воротами
         int wallRadius = Math.min(Math.max(28, radius - 10), 52); // масштаб по размеру острова
         generateOuterWalls(world, rand, centerX, y, centerZ, wallRadius);
+        generateInnerWallRing(world, rand, centerX, y, centerZ, Math.max(10, wallRadius - 12));
+        generateGatehouse(world, rand, centerX, stableSurfaceY(world, centerX, centerZ - wallRadius, y), centerZ - wallRadius + 2);
 
         // 2. Башни по углам (4 штуки)
         generateCornerTower(world, rand, centerX - wallRadius, y, centerZ - wallRadius);
@@ -45,6 +48,7 @@ public class DecoratorFortress implements IEndBiomeDecorator {
             int bz = centerZ + barracksOffsets[i][1];
             int by = stableSurfaceY(world, bx, bz, groundedCenterY);
             generateBarracks(world, rand, bx, by, bz);
+            generateFortressPath(world, centerX, y, centerZ, bx, by, bz);
         }
 
         // 5. Дорожки между зданиями
@@ -52,6 +56,12 @@ public class DecoratorFortress implements IEndBiomeDecorator {
                 centerX - wallRadius / 2, y, centerZ - wallRadius / 2);
         generateFortressPath(world, centerX, y, centerZ,
                 centerX + wallRadius / 2, y, centerZ - wallRadius / 2);
+        generateFortressPath(world, centerX, y, centerZ, centerX, y, centerZ - wallRadius);
+        generateFortressPath(world, centerX, y, centerZ, centerX, y, centerZ + wallRadius);
+        generateFortressPath(world, centerX, y, centerZ, centerX - wallRadius, y, centerZ);
+        generateFortressPath(world, centerX, y, centerZ, centerX + wallRadius, y, centerZ);
+
+        generateRuinedOutposts(world, rand, centerX, y, centerZ, wallRadius + 6);
 
         spawnGuardPatrols(world, rand, centerX, y + 1, centerZ, wallRadius);
     }
@@ -101,10 +111,14 @@ public class DecoratorFortress implements IEndBiomeDecorator {
     private void generateOuterWalls(World world, Random rand, int cx, int y, int cz, int r) {
         int wallH = 9 + rand.nextInt(4);
         for (int i = -r; i <= r; i++) {
-            buildWallSegment(world, cx + i, y, cz - r, wallH, false);
-            buildWallSegment(world, cx + i, y, cz + r, wallH, false);
-            buildWallSegment(world, cx - r, y, cz + i, wallH, true);
-            buildWallSegment(world, cx + r, y, cz + i, wallH, true);
+            int northY = stableSurfaceY(world, cx + i, cz - r, y);
+            int southY = stableSurfaceY(world, cx + i, cz + r, y);
+            int westY = stableSurfaceY(world, cx - r, cz + i, y);
+            int eastY = stableSurfaceY(world, cx + r, cz + i, y);
+            buildWallSegment(world, cx + i, northY, cz - r, wallH, false);
+            buildWallSegment(world, cx + i, southY, cz + r, wallH, false);
+            buildWallSegment(world, cx - r, westY, cz + i, wallH, true);
+            buildWallSegment(world, cx + r, eastY, cz + i, wallH, true);
         }
 
         for (int i = -r; i <= r; i += 2) {
@@ -158,6 +172,11 @@ public class DecoratorFortress implements IEndBiomeDecorator {
             }
         }
         anchorDown(world, x, y - 1, z, EndExpansion.fortressPillar, 14);
+        if (xAxis) {
+            anchorDown(world, x + 1, y - 1, z, EndExpansion.fortressPillar, 14);
+        } else {
+            anchorDown(world, x, y - 1, z + 1, EndExpansion.fortressPillar, 14);
+        }
     }
 
     private void generateCornerTower(World world, Random rand, int x, int y, int z) {
