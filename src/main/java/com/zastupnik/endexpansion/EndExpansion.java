@@ -19,7 +19,9 @@ import net.minecraft.item.Item;
 import net.minecraftforge.common.MinecraftForge;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Mod(modid = EndExpansion.MODID, name = EndExpansion.NAME, version = EndExpansion.VERSION)
 public class EndExpansion {
@@ -40,6 +42,7 @@ public class EndExpansion {
 
     private static final List<Block> generatedDecorBlocks = new ArrayList<Block>();
     private static final List<Item> generatedEndItems = new ArrayList<Item>();
+    private static final Set<String> registeredBlockNames = new HashSet<String>();
 
     // =========================================================================
     // БЛОКИ — ПОВЕРХНОСТИ (5)
@@ -398,14 +401,18 @@ public class EndExpansion {
     }
 
     private void addDecorVariants(String theme, Block base, Material material, boolean wooden) {
-        Block stairs = new BlockEndStairs(base, theme + "_decor_stairs");
-        Block wall = new BlockEndWall(base, theme + "_decor_wall");
-        Block fence = new BlockEndFence(theme + "_decor_fence", material);
-        Block gate = new BlockEndGate(base, theme + "_decor_gate");
-        Block leaves = new BlockEndLeaves(theme + "_decor_leaves");
-        Block door = new BlockEndBase(wooden ? Material.wood : Material.iron, theme + "_decor_door", Block.soundTypeWood, 2.0F, 5.0F);
-        Block pillar = new BlockEndBase(Material.rock, theme + "_decor_pillar", Block.soundTypeStone, 2.5F, 15.0F);
-        Block lantern = new BlockEndBase(Material.glass, theme + "_decor_lantern", Block.soundTypeGlass, 0.6F, 2.0F).setLightLevel(0.45F);
+        // Для деревянных тем добавляем префикс wood_, чтобы имена реестра
+        // не пересекались с одноимёнными каменными темами (например ancient).
+        String registryTheme = wooden ? theme + "_wood" : theme;
+
+        Block stairs = new BlockEndStairs(base, registryTheme + "_decor_stairs");
+        Block wall = new BlockEndWall(base, registryTheme + "_decor_wall");
+        Block fence = new BlockEndFence(registryTheme + "_decor_fence", material);
+        Block gate = new BlockEndGate(base, registryTheme + "_decor_gate");
+        Block leaves = new BlockEndLeaves(registryTheme + "_decor_leaves");
+        Block door = new BlockEndBase(wooden ? Material.wood : Material.iron, registryTheme + "_decor_door", Block.soundTypeWood, 2.0F, 5.0F);
+        Block pillar = new BlockEndBase(Material.rock, registryTheme + "_decor_pillar", Block.soundTypeStone, 2.5F, 15.0F);
+        Block lantern = new BlockEndBase(Material.glass, registryTheme + "_decor_lantern", Block.soundTypeGlass, 0.6F, 2.0F).setLightLevel(0.45F);
 
         reg(stairs);
         reg(wall);
@@ -471,6 +478,11 @@ public class EndExpansion {
     private void reg(Block block) {
         if (block == null) return;
         String n = block.getUnlocalizedName().substring(5);
+
+        if (!registeredBlockNames.add(n)) {
+            throw new IllegalStateException("Duplicate block registry name detected before registration: " + n);
+        }
+
         GameRegistry.registerBlock(block, n);
         block.setCreativeTab(tabEndExpansion);
     }
