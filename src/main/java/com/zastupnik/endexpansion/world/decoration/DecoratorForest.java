@@ -17,7 +17,7 @@ public class DecoratorForest implements IEndBiomeDecorator {
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
         // 1. Много деревьев, чтобы остров выглядел живым.
         EndIslandGenerator gen = new EndIslandGenerator();
-        int treeCount = Math.max(14, radius / 2) + rand.nextInt(Math.max(4, radius / 3));
+        int treeCount = Math.max(18, radius / 2) + rand.nextInt(Math.max(6, radius / 2));
         for (int i = 0; i < treeCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, Math.max(10, radius - 6));
             int y = findGroundY(world, pos[0], pos[1]);
@@ -38,7 +38,7 @@ public class DecoratorForest implements IEndBiomeDecorator {
         }
 
         // 3. Полые стволы — 3-5 штук
-        int hollowCount = 3 + rand.nextInt(3);
+        int hollowCount = 4 + rand.nextInt(4);
         for (int i = 0; i < hollowCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius);
             int y = findGroundY(world, pos[0], pos[1]);
@@ -49,7 +49,7 @@ public class DecoratorForest implements IEndBiomeDecorator {
         }
 
         // 4. Хижины из пней — 1-2 штуки
-        int hutCount = 1 + rand.nextInt(2);
+        int hutCount = 2 + rand.nextInt(2);
         for (int i = 0; i < hutCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius / 2);
             int y = findGroundY(world, pos[0], pos[1]);
@@ -60,7 +60,16 @@ public class DecoratorForest implements IEndBiomeDecorator {
             }
         }
 
+        int fallenLogs = 8 + rand.nextInt(6);
+        for (int i = 0; i < fallenLogs; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, radius);
+            int y = findGroundY(world, pos[0], pos[1]);
+            if (y < 2 || !isForestGround(world, pos[0], y - 1, pos[1])) continue;
+            generateFallenLog(world, rand, pos[0], y, pos[1]);
+        }
+
         generateForestUndergrowth(world, rand, centerX, centerZ, radius);
+        scatterForestGrass(world, rand, centerX, centerZ, radius);
     }
 
     private void generateForestUndergrowth(World world, Random rand, int centerX, int centerZ, int radius) {
@@ -73,6 +82,33 @@ public class DecoratorForest implements IEndBiomeDecorator {
                 setIfAir(world, pos[0], y, pos[1], EndExpansion.spectralRose);
             } else {
                 setIfAir(world, pos[0], y, pos[1], EndExpansion.witheredLeaves);
+            }
+        }
+    }
+
+    private void scatterForestGrass(World world, Random rand, int centerX, int centerZ, int radius) {
+        int grassCount = 24 + rand.nextInt(18);
+        for (int i = 0; i < grassCount; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, radius);
+            int y = findGroundY(world, pos[0], pos[1]);
+            if (y < 2 || !isForestGround(world, pos[0], y - 1, pos[1])) continue;
+            if (world.isAirBlock(pos[0], y, pos[1])) {
+                world.setBlock(pos[0], y, pos[1], Blocks.tallgrass, 1, 2);
+            }
+        }
+    }
+
+    private void generateFallenLog(World world, Random rand, int x, int y, int z) {
+        int len = 3 + rand.nextInt(5);
+        boolean xAxis = rand.nextBoolean();
+        for (int i = 0; i < len; i++) {
+            int bx = x + (xAxis ? i : 0);
+            int bz = z + (xAxis ? 0 : i);
+            if (!world.isAirBlock(bx, y, bz)) continue;
+            if (!isForestGround(world, bx, y - 1, bz)) continue;
+            world.setBlock(bx, y, bz, EndExpansion.ancientLog, 0, 2);
+            if (rand.nextInt(4) == 0 && world.isAirBlock(bx, y + 1, bz)) {
+                world.setBlock(bx, y + 1, bz, EndExpansion.glowshroom, 0, 2);
             }
         }
     }

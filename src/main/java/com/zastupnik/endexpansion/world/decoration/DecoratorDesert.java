@@ -14,7 +14,7 @@ public class DecoratorDesert implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
-        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
+        int groundedCenterY = findStableDesertY(world, centerX, centerZ, Math.max(40, centerY));
 
         generateDuneRelief(world, rand, centerX, centerZ, Math.max(18, radius - 4));
 
@@ -25,24 +25,30 @@ public class DecoratorDesert implements IEndBiomeDecorator {
         int templeCount = 2 + rand.nextInt(3);
         for (int i = 0; i < templeCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius);
-            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
-            generateRuinedTemple(world, rand, pos[0], y, pos[1]);
+            int y = findStableDesertY(world, pos[0], pos[1], groundedCenterY);
+            if (isValidDesertPatch(world, pos[0], y, pos[1], 5)) {
+                generateRuinedTemple(world, rand, pos[0], y, pos[1]);
+            }
         }
 
         // 3. Караванные стоянки — 2-4 штуки
         int campCount = 2 + rand.nextInt(3);
         for (int i = 0; i < campCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius);
-            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
-            generateCaravanCamp(world, rand, pos[0], y, pos[1]);
+            int y = findStableDesertY(world, pos[0], pos[1], groundedCenterY);
+            if (isValidDesertPatch(world, pos[0], y, pos[1], 4)) {
+                generateCaravanCamp(world, rand, pos[0], y, pos[1]);
+            }
         }
 
         // 4. Редкие оазисы и эндовые растения
         int oasisCount = 1 + rand.nextInt(2);
         for (int i = 0; i < oasisCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, Math.max(10, radius - 8));
-            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
-            generateOasis(world, rand, pos[0], y, pos[1]);
+            int y = findStableDesertY(world, pos[0], pos[1], groundedCenterY);
+            if (isValidDesertPatch(world, pos[0], y, pos[1], 3)) {
+                generateOasis(world, rand, pos[0], y, pos[1]);
+            }
         }
         scatterDesertPlants(world, rand, centerX, centerZ, radius);
     }
@@ -77,6 +83,52 @@ public class DecoratorDesert implements IEndBiomeDecorator {
         }
     }
 
+    private int findStableDesertY(World world, int x, int z, int fallback) {
+        int y = world.getTopSolidOrLiquidBlock(x, z);
+        for (int i = 0; i < 6 && y > 6; i++) {
+            Block b = world.getBlock(x, y - 1, z);
+            if (b == EndExpansion.endSand || b == EndExpansion.sandstoneEnd || b == EndExpansion.ashenStone) {
+                return y;
+            }
+            y--;
+        }
+        return fallback;
+    }
+
+    private boolean isValidDesertPatch(World world, int x, int y, int z, int halfSize) {
+        int mismatches = 0;
+        for (int dx = -halfSize; dx <= halfSize; dx++) {
+            for (int dz = -halfSize; dz <= halfSize; dz++) {
+                int py = world.getTopSolidOrLiquidBlock(x + dx, z + dz);
+                if (Math.abs(py - y) > 4) return false;
+                Block ground = world.getBlock(x + dx, py - 1, z + dz);
+                if (ground != EndExpansion.endSand && ground != EndExpansion.sandstoneEnd) {
+                    mismatches++;
+                }
+            }
+        }
+        return mismatches < (halfSize * halfSize);
+    }
+
+    private void levelDesertPad(World world, int x, int y, int z, int halfSize) {
+        for (int dx = -halfSize; dx <= halfSize; dx++) {
+            for (int dz = -halfSize; dz <= halfSize; dz++) {
+                int px = x + dx;
+                int pz = z + dz;
+                int top = world.getTopSolidOrLiquidBlock(px, pz);
+                if (top > y + 1) {
+                    for (int yy = y + 1; yy <= top; yy++) {
+                        world.setBlock(px, yy, pz, Blocks.air, 0, 2);
+                    }
+                }
+                world.setBlock(px, y - 1, pz, EndExpansion.endSand, 0, 2);
+                if (world.isAirBlock(px, y, pz)) {
+                    world.setBlock(px, y, pz, EndExpansion.endSand, 0, 2);
+                }
+            }
+        }
+    }
+
     // ===== ПИРАМИДА =====
 
     /**
@@ -86,6 +138,8 @@ public class DecoratorDesert implements IEndBiomeDecorator {
     private void generatePyramid(World world, Random rand, int x, int y, int z) {
         int levels   = 4;
         int baseSize = 13;
+
+        levelDesertPad(world, x, y, z, baseSize / 2 + 1);
 
         // Строим уровни снизу вверх
         for (int level = 0; level < levels; level++) {
@@ -196,6 +250,8 @@ public class DecoratorDesert implements IEndBiomeDecorator {
         int w = 9 + rand.nextInt(5); // 9-13
         int d = 9 + rand.nextInt(5);
 
+        levelDesertPad(world, x + w / 2, y, z + d / 2, Math.max(w, d) / 2 + 1);
+
         // Остатки пола
         for (int dx = 0; dx < w; dx++) {
             for (int dz = 0; dz < d; dz++) {
@@ -273,6 +329,8 @@ public class DecoratorDesert implements IEndBiomeDecorator {
         // Навес из песчаника (3x3 крыша на столбах)
         int w = 5, d = 4;
 
+        levelDesertPad(world, x + w / 2, y, z + d / 2, 4);
+
         // Столбы навеса
         for (int dy = 0; dy < 3; dy++) {
             setBlock(world, x,         y + dy, z,         EndExpansion.sandstoneEnd);
@@ -335,6 +393,9 @@ public class DecoratorDesert implements IEndBiomeDecorator {
                 if (dx * dx + dz * dz <= r * r) {
                     world.setBlock(x + dx, y - 1, z + dz, Blocks.water, 0, 2);
                     world.setBlock(x + dx, y - 2, z + dz, EndExpansion.endSand,  0, 2);
+                    if (world.isAirBlock(x + dx, y, z + dz) && rand.nextInt(3) != 0) {
+                        world.setBlock(x + dx, y, z + dz, Blocks.flowing_water, 0, 2);
+                    }
                     // Кактусы по берегу
                     if (dx * dx + dz * dz > (r - 1) * (r - 1) && rand.nextInt(3) == 0) {
                         if (world.getBlock(x + dx, y, z + dz) == Blocks.air) {
