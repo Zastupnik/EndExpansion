@@ -49,7 +49,7 @@ public class WorldGenManager implements IWorldGenerator {
 
         // ── Шаг 3: Редкость — только часть ячеек содержит острова ───────────────
         // 1 из 3 ячеек → архипелаги встречаются заметно чаще.
-        if (rand.nextInt(3) != 0) return;
+        if (rand.nextInt(2) != 0) return;
 
         // ── Шаг 4: Позиция кластера внутри ячейки (случайно смещена) ────────────
         int offsetX = rand.nextInt(spacing * 16); // случайный сдвиг в блоках внутри ячейки
@@ -67,15 +67,17 @@ public class WorldGenManager implements IWorldGenerator {
         // ── Шаг 6: Размер и количество островов ─────────────────────────────────
         // Большие архипелаги: чаще несколько островов, чтобы мир был насыщеннее.
         int islandCount;
-        int countRoll = rand.nextInt(12);
+        int countRoll = rand.nextInt(16);
         if (countRoll < 2) {
-            islandCount = 3;
-        } else if (countRoll < 6) {
             islandCount = 4;
-        } else if (countRoll < 10) {
+        } else if (countRoll < 7) {
             islandCount = 5;
-        } else {
+        } else if (countRoll < 12) {
             islandCount = 6;
+        } else if (countRoll < 15) {
+            islandCount = 7;
+        } else {
+            islandCount = 8;
         }
 
         islandGen.generateCluster(world, rand, blockX, blockZ, biome, islandCount, getRadius(biome, rand));
