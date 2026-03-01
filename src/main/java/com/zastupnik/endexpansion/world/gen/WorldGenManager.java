@@ -65,8 +65,18 @@ public class WorldGenManager implements IWorldGenerator {
         if (biome == null) return; // EndBiomes ещё не проинициализированы — пропускаем
 
         // ── Шаг 6: Размер и количество островов ─────────────────────────────────
-        // 40% — кластеры 2–4 острова, иначе одиночный.
-        int islandCount = (rand.nextInt(10) < 6) ? (2 + rand.nextInt(2)) : 1;
+        // Большие архипелаги: чаще несколько островов, чтобы мир был насыщеннее.
+        int islandCount;
+        int countRoll = rand.nextInt(10);
+        if (countRoll < 2) {
+            islandCount = 2;
+        } else if (countRoll < 6) {
+            islandCount = 3;
+        } else if (countRoll < 9) {
+            islandCount = 4;
+        } else {
+            islandCount = 5;
+        }
 
         islandGen.generateCluster(world, rand, blockX, blockZ, biome, islandCount, getRadius(biome, rand));
     }

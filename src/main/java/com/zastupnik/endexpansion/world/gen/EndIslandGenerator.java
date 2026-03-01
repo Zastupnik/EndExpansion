@@ -61,10 +61,7 @@ public class EndIslandGenerator {
             nodes.add(new IslandNode(ox, oy, oz, radius));
         }
 
-        // ===== мосты =====
-        if (nodes.size() > 1) {
-            new DecoratorBridge().buildClusterBridges(world, rand, nodes);
-        }
+        // Старые мосты отключены: они оставляли артефактные конструкции между островами.
 
         return nodes;
     }
@@ -96,7 +93,7 @@ public class EndIslandGenerator {
     // ===== ВЫСОТА И ТОЛЩИНА =====
 
     private int getIslandY(Random rand) {
-        return 65 + rand.nextInt(91); // 65–155
+        return 72 + rand.nextInt(54); // 72–125
     }
 
     /**
@@ -106,10 +103,9 @@ public class EndIslandGenerator {
      */
     private int pickThickness(Random rand) {
         int r = rand.nextInt(10);
-        if (r < 3) return 15 + rand.nextInt(11); // 30% → 15–25  (тонкий, но не платформа)
-        if (r < 7) return 25 + rand.nextInt(21); // 40% → 25–45  (нормальный)
-        if (r < 9) return 45 + rand.nextInt(21); // 20% → 45–65  (толстый)
-        return 65 + rand.nextInt(26);             // 10% → 65–90  (массивный)
+        if (r < 3) return 18 + rand.nextInt(10); // 30% → 18–27
+        if (r < 8) return 28 + rand.nextInt(17); // 50% → 28–44
+        return 45 + rand.nextInt(16);            // 20% → 45–60
     }
 
     // ===== ВЫБОР ФОРМЫ =====
@@ -493,16 +489,28 @@ public class EndIslandGenerator {
      */
     private Block pickBody(Block top, Block filler, int dy, int thickness, int dx, int dz) {
         if (dy == 0) return top;
-        if (dy >= thickness - 3) return Blocks.end_stone;
 
-        // Для не-эндерняковых биомов почти убираем прожилки,
-        // чтобы не было случайных артефактных пятен из end_stone.
-        if (filler == Blocks.end_stone) {
-            if (dy > 2 && ((dx * 3 ^ dz * 7 ^ dy * 13) & 7) == 0) return Blocks.end_stone;
-        } else if (dy > 4 && ((dx * 5 ^ dz * 11 ^ dy * 3) & 63) == 0) {
-            return Blocks.end_stone;
+        int hash = Math.abs(dx * 7349 + dz * 9157 + dy * 1879);
+
+        // Верхние слои мягче и ближе к биому.
+        if (dy <= 2) {
+            if ((hash & 15) == 0) return Blocks.end_stone;
+            return filler;
         }
 
+        // Глубже — хаотичный микс основания.
+        if (dy > thickness / 3) {
+            int roll = hash % 100;
+            if (roll < 42) return Blocks.end_stone;
+            if (roll < 67) return filler;
+            if (roll < 79 && EndExpansion.fortressPillar != null) return EndExpansion.fortressPillar;
+            if (roll < 88 && EndExpansion.corruptedStone != null) return EndExpansion.corruptedStone;
+            if (roll < 96 && EndExpansion.obsidianEnd != null) return EndExpansion.obsidianEnd;
+            if (roll < 98 && EndExpansion.pulsingRock != null) return EndExpansion.pulsingRock;
+            return Blocks.bedrock;
+        }
+
+        if ((hash & 7) == 0) return Blocks.end_stone;
         return filler;
     }
 
@@ -528,12 +536,15 @@ public class EndIslandGenerator {
                 if (topY < cy - 24 || topY > cy + 28) continue;
 
                 double edgeFactor = 1.0D - (dist / reliefRadius);
-                double wave = Math.sin(x * 0.12D + phaseX) + Math.cos(z * 0.10D + phaseZ);
-                int delta = (int)Math.round(edgeFactor * wave * 1.8D);
+                double macro = Math.sin(x * 0.07D + phaseX) + Math.cos(z * 0.06D + phaseZ);
+                double micro = Math.sin((x + z) * 0.19D + phaseX * 0.5D);
+                int delta = (int)Math.round(edgeFactor * (macro * 1.8D + micro * 0.9D));
 
                 // Кладбище почти ровное, но не абсолютно плоское.
                 if (biome == EndBiomes.biomeCemetery) {
                     delta = Math.max(-1, Math.min(1, delta));
+                } else {
+                    delta = Math.max(-4, Math.min(4, delta));
                 }
 
                 if (delta > 0) {
@@ -550,6 +561,8 @@ public class EndIslandGenerator {
                 }
             }
         }
+
+        erodeIslandEdges(world, rand, cx, cy, cz, radius, topBlock, fillerBlock);
     }
 
     // ===== УТИЛИТЫ =====
@@ -596,17 +609,27 @@ public class EndIslandGenerator {
     // ===== ОКЕАН =====
 
     private void fillOceanBasin(World world, Random rand, int cx, int cy, int cz, int radius) {
-        int r = Math.max(4, radius);
-        int wl = cy - 1, depth = 4 + rand.nextInt(4);
+        int r = Math.max(7, radius + 4);
+        int wl = cy - 1;
+        int depth = 6 + rand.nextInt(5);
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
-                if (dx*dx + dz*dz <= r*r) {
-                    for (int dy = 0; dy < depth; dy++)
-                        world.setBlock(cx+dx, wl-dy, cz+dz, Blocks.air, 0, 2);
-                    for (int dy = 0; dy < depth-1; dy++)
-                        if (world.isAirBlock(cx+dx, wl-dy, cz+dz))
-                            world.setBlock(cx+dx, wl-dy, cz+dz, Blocks.water, 0, 2);
+                double dist = Math.sqrt(dx * dx + dz * dz);
+                double norm = dist / r;
+                if (norm > 1.0D) continue;
+
+                int localDepth = depth - (int)(norm * 3.0D);
+                localDepth += ((dx * 13 + dz * 7) & 3) - 1;
+                if (localDepth < 3) localDepth = 3;
+
+                for (int dy = 0; dy < localDepth; dy++) {
+                    world.setBlock(cx + dx, wl - dy, cz + dz, Blocks.water, 0, 2);
                 }
+
+                int floorY = wl - localDepth;
+                Block floor = ((dx * dx + dz * dz) & 1) == 0 ? Blocks.end_stone : EndExpansion.oceanStone;
+                if (((dx * 31 + dz * 17) & 15) == 0 && EndExpansion.coralStoneEnd != null) floor = EndExpansion.coralStoneEnd;
+                world.setBlock(cx + dx, floorY, cz + dz, floor, 0, 2);
             }
         }
     }
@@ -622,6 +645,78 @@ public class EndIslandGenerator {
         else if (biome == EndBiomes.biomeForest)    new DecoratorForest().decorate(world, rand, cx, cy, cz, radius);
         else if (biome == EndBiomes.biomeJungle)    new DecoratorJungle().decorate(world, rand, cx, cy, cz, radius);
         else if (biome == EndBiomes.biomeInfection) new DecoratorInfection().decorate(world, rand, cx, cy, cz, radius);
+
+        populateIslandDetails(world, rand, cx, cy, cz, biome, radius);
+    }
+
+    private void erodeIslandEdges(World world, Random rand, int cx, int cy, int cz, int radius, Block top, Block filler) {
+        int outer = Math.max(8, radius);
+        int inner = (int)(outer * 0.74F);
+
+        for (int dx = -outer; dx <= outer; dx++) {
+            for (int dz = -outer; dz <= outer; dz++) {
+                int d2 = dx * dx + dz * dz;
+                if (d2 < inner * inner || d2 > outer * outer) continue;
+
+                int x = cx + dx;
+                int z = cz + dz;
+                int topY = world.getTopSolidOrLiquidBlock(x, z);
+                if (topY < cy - 24 || topY > cy + 28) continue;
+
+                int hash = Math.abs(dx * 37 + dz * 57);
+                int carve = hash % 3;
+                if (rand.nextInt(4) == 0) carve++;
+
+                for (int i = 0; i < carve; i++) {
+                    int y = topY - i;
+                    if (!world.isAirBlock(x, y, z)) {
+                        world.setBlock(x, y, z, Blocks.air, 0, 2);
+                    }
+                }
+
+                if ((hash & 7) == 0) {
+                    int lipY = Math.max(cy - 20, topY - carve);
+                    world.setBlock(x, lipY, z, top, 0, 2);
+                    if (rand.nextBoolean()) world.setBlock(x, lipY - 1, z, filler, 0, 2);
+                }
+            }
+        }
+    }
+
+    private void populateIslandDetails(World world, Random rand, int cx, int cy, int cz,
+                                       BiomeGenBase biome, int radius) {
+        int featureCount = Math.max(18, radius / 2) + rand.nextInt(Math.max(8, radius / 2));
+        Block accent = (biome == EndBiomes.biomeOcean && EndExpansion.coralStoneEnd != null)
+                ? EndExpansion.coralStoneEnd
+                : (EndExpansion.mossyAshenStone != null ? EndExpansion.mossyAshenStone : Blocks.end_stone);
+
+        for (int i = 0; i < featureCount; i++) {
+            float a = rand.nextFloat() * (float)(Math.PI * 2);
+            float d = 6 + rand.nextFloat() * (radius * 0.92F);
+            int x = cx + (int)(Math.cos(a) * d);
+            int z = cz + (int)(Math.sin(a) * d);
+            int y = world.getTopSolidOrLiquidBlock(x, z);
+            if (y < cy - 28 || y > cy + 30) continue;
+
+            if (rand.nextInt(5) == 0) {
+                int h = 1 + rand.nextInt(3);
+                for (int dy = 0; dy < h; dy++) {
+                    if (world.isAirBlock(x, y + dy, z)) {
+                        world.setBlock(x, y + dy, z, accent, 0, 2);
+                    }
+                }
+            } else {
+                int ring = 1 + rand.nextInt(2);
+                for (int dx = -ring; dx <= ring; dx++) {
+                    for (int dz = -ring; dz <= ring; dz++) {
+                        if (dx * dx + dz * dz > ring * ring) continue;
+                        if (rand.nextInt(3) == 0) continue;
+                        int py = world.getTopSolidOrLiquidBlock(x + dx, z + dz) - 1;
+                        if (py >= cy - 30) world.setBlock(x + dx, py, z + dz, accent, 0, 2);
+                    }
+                }
+            }
+        }
     }
 
     // ===== ЭНДЕРМЕНЫ =====
