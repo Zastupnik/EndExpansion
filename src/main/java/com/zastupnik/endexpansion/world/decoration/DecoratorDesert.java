@@ -16,23 +16,64 @@ public class DecoratorDesert implements IEndBiomeDecorator {
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
         int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
 
+        generateDuneRelief(world, rand, centerX, centerZ, Math.max(18, radius - 4));
+
         // 1. Пирамида — 1 на остров, в центре
         generatePyramid(world, rand, centerX, groundedCenterY, centerZ);
 
-        // 2. Разрушенные храмы — 1-2 штуки
-        int templeCount = 1 + rand.nextInt(2);
+        // 2. Разрушенные храмы — 2-4 штуки
+        int templeCount = 2 + rand.nextInt(3);
         for (int i = 0; i < templeCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius);
             int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
             generateRuinedTemple(world, rand, pos[0], y, pos[1]);
         }
 
-        // 3. Караванные стоянки — 2-3 штуки
-        int campCount = 2 + rand.nextInt(2);
+        // 3. Караванные стоянки — 2-4 штуки
+        int campCount = 2 + rand.nextInt(3);
         for (int i = 0; i < campCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius);
             int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
             generateCaravanCamp(world, rand, pos[0], y, pos[1]);
+        }
+
+        // 4. Редкие оазисы и эндовые растения
+        int oasisCount = 1 + rand.nextInt(2);
+        for (int i = 0; i < oasisCount; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, Math.max(10, radius - 8));
+            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
+            generateOasis(world, rand, pos[0], y, pos[1]);
+        }
+        scatterDesertPlants(world, rand, centerX, centerZ, radius);
+    }
+
+    private void generateDuneRelief(World world, Random rand, int centerX, int centerZ, int radius) {
+        int duneCount = 14 + rand.nextInt(10);
+        for (int i = 0; i < duneCount; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, radius);
+            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    if (dx * dx + dz * dz > 6) continue;
+                    if (world.getBlock(pos[0] + dx, y - 1, pos[1] + dz) == EndExpansion.endSand) {
+                        world.setBlock(pos[0] + dx, y, pos[1] + dz, EndExpansion.endSand, 0, 2);
+                    }
+                }
+            }
+        }
+    }
+
+    private void scatterDesertPlants(World world, Random rand, int centerX, int centerZ, int radius) {
+        int plantCount = 12 + rand.nextInt(12);
+        for (int i = 0; i < plantCount; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, radius);
+            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
+            if (world.getBlock(pos[0], y - 1, pos[1]) != EndExpansion.endSand) continue;
+            if (rand.nextInt(4) == 0) {
+                world.setBlock(pos[0], y, pos[1], EndExpansion.spectralRose, 0, 2);
+            } else {
+                world.setBlock(pos[0], y, pos[1], EndExpansion.endCactus, 0, 2);
+            }
         }
     }
 

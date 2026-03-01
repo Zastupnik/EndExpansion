@@ -17,7 +17,7 @@ public class DecoratorForest implements IEndBiomeDecorator {
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
         // 1. Много деревьев, чтобы остров выглядел живым.
         EndIslandGenerator gen = new EndIslandGenerator();
-        int treeCount = Math.max(10, radius / 3) + rand.nextInt(Math.max(3, radius / 4));
+        int treeCount = Math.max(14, radius / 2) + rand.nextInt(Math.max(4, radius / 3));
         for (int i = 0; i < treeCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, Math.max(10, radius - 6));
             int y = findGroundY(world, pos[0], pos[1]);
@@ -57,6 +57,22 @@ public class DecoratorForest implements IEndBiomeDecorator {
             if (isForestGround(world, pos[0], y - 1, pos[1])) {
                 generateStumpHut(world, rand, pos[0], y, pos[1]);
                 sinkSupportPillars(world, pos[0] + 2, y - 1, pos[1] + 2, 5, EndExpansion.witheredLog);
+            }
+        }
+
+        generateForestUndergrowth(world, rand, centerX, centerZ, radius);
+    }
+
+    private void generateForestUndergrowth(World world, Random rand, int centerX, int centerZ, int radius) {
+        int patchCount = 10 + rand.nextInt(8);
+        for (int i = 0; i < patchCount; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, radius);
+            int y = findGroundY(world, pos[0], pos[1]);
+            if (y < 2 || !isForestGround(world, pos[0], y - 1, pos[1])) continue;
+            if (rand.nextBoolean()) {
+                setIfAir(world, pos[0], y, pos[1], EndExpansion.spectralRose);
+            } else {
+                setIfAir(world, pos[0], y, pos[1], EndExpansion.witheredLeaves);
             }
         }
     }

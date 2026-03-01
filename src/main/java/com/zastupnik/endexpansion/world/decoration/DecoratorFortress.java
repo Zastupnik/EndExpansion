@@ -15,32 +15,30 @@ public class DecoratorFortress implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
-        int baseY = world.getTopSolidOrLiquidBlock(centerX, centerZ);
-        int wallRadius = Math.min(Math.max(24, radius / 2), 38);
+        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
 
-        // Выравниваем центральную зону и подводим фундамент, чтобы не было висящих частей.
-        terraformCourtyard(world, centerX, baseY, centerZ, wallRadius + 3);
+        // Крепость строится от центра острова
+        int y = world.getTopSolidOrLiquidBlock(centerX, centerZ);
 
-        generateOuterWalls(world, rand, centerX, baseY, centerZ, wallRadius);
-        generateInnerWallRing(world, rand, centerX, baseY, centerZ, wallRadius - 8);
+        // 1. Внешние стены с воротами
+        int wallRadius = Math.min(Math.max(28, radius - 10), 52); // масштаб по размеру острова
+        generateOuterWalls(world, rand, centerX, y, centerZ, wallRadius);
 
-        generateCornerTower(world, rand, centerX - wallRadius, baseY, centerZ - wallRadius);
-        generateCornerTower(world, rand, centerX + wallRadius, baseY, centerZ - wallRadius);
-        generateCornerTower(world, rand, centerX - wallRadius, baseY, centerZ + wallRadius);
-        generateCornerTower(world, rand, centerX + wallRadius, baseY, centerZ + wallRadius);
+        // 2. Башни по углам (4 штуки)
+        generateCornerTower(world, rand, centerX - wallRadius, y, centerZ - wallRadius);
+        generateCornerTower(world, rand, centerX + wallRadius, y, centerZ - wallRadius);
+        generateCornerTower(world, rand, centerX - wallRadius, y, centerZ + wallRadius);
+        generateCornerTower(world, rand, centerX + wallRadius, y, centerZ + wallRadius);
 
-        generateGatehouse(world, rand, centerX, baseY, centerZ - wallRadius);
-        generateGatehouse(world, rand, centerX, baseY, centerZ + wallRadius);
+        // 3. Тронный зал — в центре, самое большое здание
+        generateThroneHall(world, rand, centerX, y, centerZ);
 
-        generateThroneHall(world, rand, centerX, baseY + 1, centerZ + 2);
-        generateCentralPlaza(world, rand, centerX, baseY, centerZ, 9);
-
-        int barracksCount = 3 + rand.nextInt(2);
-        int[][] offsets = {
-                {-wallRadius / 2, -wallRadius / 3},
-                { wallRadius / 2, -wallRadius / 3},
-                {-wallRadius / 2,  wallRadius / 3},
-                { wallRadius / 2,  wallRadius / 3}
+        // 4. Казармы — 2-3 штуки внутри стен
+        int barracksCount = 2 + rand.nextInt(2);
+        int[][] barracksOffsets = {
+                {-wallRadius / 2, -wallRadius / 2},
+                { wallRadius / 2, -wallRadius / 2},
+                {-wallRadius / 2,  wallRadius / 2}
         };
         for (int i = 0; i < barracksCount; i++) {
             int bx = centerX + offsets[i][0];
@@ -49,14 +47,31 @@ public class DecoratorFortress implements IEndBiomeDecorator {
             generateBarracks(world, rand, bx, by, bz);
         }
 
-        generateFortressPath(world, centerX, baseY, centerZ, centerX, baseY, centerZ - wallRadius);
-        generateFortressPath(world, centerX, baseY, centerZ, centerX, baseY, centerZ + wallRadius);
-        generateFortressPath(world, centerX, baseY, centerZ,
-                centerX - wallRadius / 2, baseY, centerZ - wallRadius / 3);
-        generateFortressPath(world, centerX, baseY, centerZ,
-                centerX + wallRadius / 2, baseY, centerZ - wallRadius / 3);
+        // 5. Дорожки между зданиями
+        generateFortressPath(world, centerX, y, centerZ,
+                centerX - wallRadius / 2, y, centerZ - wallRadius / 2);
+        generateFortressPath(world, centerX, y, centerZ,
+                centerX + wallRadius / 2, y, centerZ - wallRadius / 2);
 
-        generateRuinedOutposts(world, rand, centerX, baseY, centerZ, wallRadius + 6);
+        spawnGuardPatrols(world, rand, centerX, y + 1, centerZ, wallRadius);
+    }
+
+    private void spawnGuardPatrols(World world, Random rand, int centerX, int y, int centerZ, int wallRadius) {
+        int patrols = 6 + rand.nextInt(4);
+        for (int i = 0; i < patrols; i++) {
+            int px = centerX - wallRadius + rand.nextInt(wallRadius * 2 + 1);
+            int pz = centerZ - wallRadius + rand.nextInt(wallRadius * 2 + 1);
+            if (!world.isAirBlock(px, y, pz)) continue;
+            world.setBlock(px, y, pz, Blocks.mob_spawner, 0, 2);
+            net.minecraft.tileentity.TileEntityMobSpawner spawner =
+                    (net.minecraft.tileentity.TileEntityMobSpawner) world.getTileEntity(px, y, pz);
+            if (spawner != null) {
+                net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+                spawner.writeToNBT(nbt);
+                nbt.setString("EntityId", rand.nextInt(3) == 0 ? "CaveSpider" : "Enderman");
+                spawner.readFromNBT(nbt);
+            }
+        }
     }
 
     private void terraformCourtyard(World world, int cx, int y, int cz, int radius) {

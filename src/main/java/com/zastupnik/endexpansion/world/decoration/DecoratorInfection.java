@@ -16,8 +16,10 @@ public class DecoratorInfection implements IEndBiomeDecorator {
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
         int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
 
-        // 1. Гигантские грибы — 3-5 штук, доминируют над биомом
-        int mushroomCount = 3 + rand.nextInt(3);
+        generateFearSpikes(world, rand, centerX, centerZ, Math.max(12, radius - 4));
+
+        // 1. Гигантские грибы — 4-7 штук, доминируют над биомом
+        int mushroomCount = 4 + rand.nextInt(4);
         for (int i = 0; i < mushroomCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius);
             int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
@@ -50,6 +52,22 @@ public class DecoratorInfection implements IEndBiomeDecorator {
             int[] pos = randomPos(rand, centerX, centerZ, radius);
             int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
             generateInfectedRuin(world, rand, pos[0], y, pos[1]);
+        }
+    }
+
+    private void generateFearSpikes(World world, Random rand, int centerX, int centerZ, int radius) {
+        int spikeCount = 10 + rand.nextInt(8);
+        for (int i = 0; i < spikeCount; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, radius);
+            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
+            if (world.getBlock(pos[0], y - 1, pos[1]) != EndExpansion.infestedMycelium) continue;
+            int h = 3 + rand.nextInt(5);
+            for (int dy = 0; dy < h; dy++) {
+                world.setBlock(pos[0], y + dy, pos[1], EndExpansion.pulsingRock, 0, 2);
+            }
+            if (rand.nextBoolean()) {
+                setIfAir(world, pos[0], y + h, pos[1], EndExpansion.endTorch);
+            }
         }
     }
 
