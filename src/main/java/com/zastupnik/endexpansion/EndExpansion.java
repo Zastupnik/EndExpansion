@@ -3,6 +3,7 @@ package com.zastupnik.endexpansion;
 import com.zastupnik.endexpansion.blocks.*;
 import com.zastupnik.endexpansion.handler.*;
 import com.zastupnik.endexpansion.items.ItemEndTeleporter;
+import com.zastupnik.endexpansion.items.ItemEndFood;
 import com.zastupnik.endexpansion.proxy.CommonProxy;
 import com.zastupnik.endexpansion.world.biome.EndBiomes;
 import com.zastupnik.endexpansion.world.gen.WorldGenManager;
@@ -45,6 +46,8 @@ public class EndExpansion {
 
     // ПРЕДМЕТЫ
     public static Item endTeleporter;
+    public static Item voidPear;
+    public static Item gloomBerry;
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -52,6 +55,10 @@ public class EndExpansion {
 
         endTeleporter = new ItemEndTeleporter().setUnlocalizedName("end_teleporter");
         GameRegistry.registerItem(endTeleporter, "end_teleporter");
+        voidPear = new ItemEndFood("void_pear", 5, 0.6F, false);
+        gloomBerry = new ItemEndFood("gloom_berry", 3, 0.4F, false);
+        GameRegistry.registerItem(voidPear, "void_pear");
+        GameRegistry.registerItem(gloomBerry, "gloom_berry");
 
         // ИНИЦИАЛИЗАЦИЯ ОСНОВЫ
         initBaseBlocks();

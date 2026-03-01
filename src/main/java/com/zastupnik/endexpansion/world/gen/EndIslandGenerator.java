@@ -2,6 +2,7 @@ package com.zastupnik.endexpansion.world.gen;
 
 import com.zastupnik.endexpansion.EndExpansion;
 import com.zastupnik.endexpansion.world.biome.EndBiomes;
+import com.zastupnik.endexpansion.handler.ConfigHandler;
 import com.zastupnik.endexpansion.world.decoration.*;
 import net.minecraft.block.Block;
 import net.minecraft.entity.monster.EntityEnderman;
@@ -27,7 +28,7 @@ public class EndIslandGenerator {
         // Декор СТРОГО после блоков — иначе флора выпадает предметами
         decorateIsland(world, rand, x, y, z, biome, baseRadius);
 
-        if (rand.nextInt(3) != 0) spawnEndermen(world, rand, x, y, z, baseRadius);
+        if (ConfigHandler.spawnEndermen) spawnEndermen(world, rand, x, y, z, baseRadius);
     }
 
     // ===== БЛОКИ БИОМОВ =====
@@ -322,7 +323,12 @@ public class EndIslandGenerator {
     // ===== УТИЛИТЫ СЛОЁВ =====
 
     private void placeBlock(World world, int x, int y, int z, Block block, boolean isTop, BiomeGenBase biome) {
-        world.setBlock(x, y, z, block, 0, 2);
+        Block finalBlock = block;
+        int mixSeed = Math.abs(x * 31 + y * 17 + z * 13);
+        if (!isTop && mixSeed % 9 == 0 && block != Blocks.end_stone) {
+            finalBlock = Blocks.end_stone;
+        }
+        world.setBlock(x, y, z, finalBlock, 0, 2);
         if (isTop) setBiomeAt(world, x, z, biome);
     }
 
@@ -361,7 +367,7 @@ public class EndIslandGenerator {
     // ===== ЭНДЕРМЕНЫ =====
 
     private void spawnEndermen(World world, Random rand, int cx, int cy, int cz, int radius) {
-        int count = 1 + rand.nextInt(3);
+        int count = Math.max(0, ConfigHandler.endermenPerIsland == 0 ? 0 : 1 + rand.nextInt(ConfigHandler.endermenPerIsland));
         for (int i = 0; i < count; i++) {
             float a = rand.nextFloat() * (float)(Math.PI * 2);
             float d = rand.nextFloat() * radius * 0.6F;
@@ -371,6 +377,7 @@ public class EndIslandGenerator {
             while (ey > cy - 5 && world.isAirBlock(ex, ey, ez)) ey--;
             ey++;
             if (world.isAirBlock(ex, ey, ez)) continue;
+            if (ey - cy > 15) continue;
             EntityEnderman e = new EntityEnderman(world);
             e.setPosition(ex + 0.5, ey, ez + 0.5);
             world.spawnEntityInWorld(e);
@@ -409,6 +416,7 @@ public class EndIslandGenerator {
             if (d <= 10 && rand.nextInt(4) != 0 && world.isAirBlock(sx+lx, y+height+ly, sz+lz))
                 world.setBlock(sx+lx, y+height+ly, sz+lz, EndExpansion.ancientLeaves, 0, 2);
         }
+        hangFruit(world, rand, sx, y + height, sz, EndExpansion.ancientLeaves);
     }
 
     public void generateJungleTree(World world, Random rand, int x, int y, int z) {
@@ -427,6 +435,22 @@ public class EndIslandGenerator {
             float maxR = (cr-Math.abs(ly))*(cr-Math.abs(ly));
             if (d <= maxR && rand.nextInt(5)!=0 && world.isAirBlock(x+lx, y+height+ly, z+lz))
                 world.setBlock(x+lx, y+height+ly, z+lz, EndExpansion.tropicalLeaves, 0, 2);
+        }
+        hangFruit(world, rand, x, y + height, z, EndExpansion.tropicalLeaves);
+    }
+
+    private void hangFruit(World world, Random rand, int x, int y, int z, Block leaves) {
+        if (rand.nextInt(5) != 0) return;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                for (int dy = -2; dy <= 0; dy++) {
+                    if (world.getBlock(x + dx, y + dy + 1, z + dz) == leaves
+                            && world.isAirBlock(x + dx, y + dy, z + dz)
+                            && rand.nextInt(7) == 0) {
+                        world.setBlock(x + dx, y + dy, z + dz, EndExpansion.glowshroom, 0, 2);
+                    }
+                }
+            }
         }
     }
 

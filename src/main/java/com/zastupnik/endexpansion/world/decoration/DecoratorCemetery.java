@@ -1,6 +1,7 @@
 package com.zastupnik.endexpansion.world.decoration;
 
 import com.zastupnik.endexpansion.EndExpansion;
+import com.zastupnik.endexpansion.handler.ConfigHandler;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.tileentity.TileEntityChest;
@@ -275,13 +276,17 @@ public class DecoratorCemetery implements IEndBiomeDecorator {
         TileEntityChest chest = (TileEntityChest) world.getTileEntity(x, y, z);
         if (chest == null) return;
 
-        // TODO: добавить кастомные предметы когда будут готовы
-        // Пока кладём кости и гнилое мясо как заглушку
         chest.setInventorySlotContents(0,
-                new net.minecraft.item.ItemStack(net.minecraft.init.Items.bone, 1 + rand.nextInt(4)));
+                new net.minecraft.item.ItemStack(net.minecraft.init.Items.bone,
+                        ConfigHandler.getRandomAmount(rand, ConfigHandler.cemeteryChestBoneMin, ConfigHandler.cemeteryChestBoneMax)));
         chest.setInventorySlotContents(1,
-                new net.minecraft.item.ItemStack(net.minecraft.init.Items.rotten_flesh, 1 + rand.nextInt(3)));
-        chest.setInventorySlotContents(4,
-                new net.minecraft.item.ItemStack(net.minecraft.init.Items.ender_pearl, 1 + rand.nextInt(2)));
+                new net.minecraft.item.ItemStack(net.minecraft.init.Items.rotten_flesh,
+                        ConfigHandler.getRandomAmount(rand, ConfigHandler.cemeteryChestRottenFleshMin, ConfigHandler.cemeteryChestRottenFleshMax)));
+        chest.setInventorySlotContents(2,
+                new net.minecraft.item.ItemStack(net.minecraft.init.Items.ender_pearl,
+                        ConfigHandler.getRandomAmount(rand, ConfigHandler.cemeteryChestEnderPearlMin, ConfigHandler.cemeteryChestEnderPearlMax)));
+        chest.setInventorySlotContents(3,
+                new net.minecraft.item.ItemStack(com.zastupnik.endexpansion.EndExpansion.gloomBerry,
+                        ConfigHandler.getRandomAmount(rand, 1, 2)));
     }
 }

@@ -1,6 +1,7 @@
 package com.zastupnik.endexpansion.world.decoration;
 
 import com.zastupnik.endexpansion.EndExpansion;
+import com.zastupnik.endexpansion.handler.ConfigHandler;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
@@ -157,7 +158,11 @@ public class DecoratorForest implements IEndBiomeDecorator {
         // Грибы на стволе
         for (int i = 0; i < length; i++) {
             if (rand.nextInt(3) == 0) {
-                world.setBlock(x + dirX * i, y + 2, z + dirZ * i, EndExpansion.glowshroom, 0, 2);
+                int fx = x + dirX * i;
+                int fz = z + dirZ * i;
+                if (world.getBlock(fx, y + 1, fz) == EndExpansion.forestMoss || world.getBlock(fx, y + 1, fz) == EndExpansion.deadGrass || world.getBlock(fx, y + 1, fz) == net.minecraft.init.Blocks.end_stone) {
+                    world.setBlock(fx, y + 2, fz, EndExpansion.glowshroom, 0, 2);
+                }
             }
         }
     }
@@ -245,11 +250,16 @@ public class DecoratorForest implements IEndBiomeDecorator {
         if (chest == null) return;
 
         chest.setInventorySlotContents(0,
-                new ItemStack(Items.ender_pearl, 1 + rand.nextInt(3)));
+                new ItemStack(Items.ender_pearl,
+                        ConfigHandler.getRandomAmount(rand, ConfigHandler.forestChestEnderPearlMin, ConfigHandler.forestChestEnderPearlMax)));
         chest.setInventorySlotContents(1,
-                new ItemStack(EndExpansion.ancientLog, 2 + rand.nextInt(5)));
+                new ItemStack(EndExpansion.ancientLog,
+                        ConfigHandler.getRandomAmount(rand, ConfigHandler.forestChestAncientLogMin, ConfigHandler.forestChestAncientLogMax)));
         chest.setInventorySlotContents(2,
-                new ItemStack(Items.bone, 1 + rand.nextInt(4)));
-        // TODO: добавить кастомные предметы леса
+                new ItemStack(Items.bone,
+                        ConfigHandler.getRandomAmount(rand, ConfigHandler.forestChestBoneMin, ConfigHandler.forestChestBoneMax)));
+        chest.setInventorySlotContents(3,
+                new ItemStack(EndExpansion.voidPear,
+                        ConfigHandler.getRandomAmount(rand, ConfigHandler.forestChestVoidPearMin, ConfigHandler.forestChestVoidPearMax)));
     }
 }

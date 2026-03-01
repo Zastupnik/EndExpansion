@@ -96,6 +96,12 @@ public class ConfigHandler {
     public static int fortressChestGoldenAppleMin  = 0; public static int fortressChestGoldenAppleMax  = 1;
     public static int fortressChestEnderPearlMin   = 2; public static int fortressChestEnderPearlMax   = 5;
 
+    // ===== ЛУТ: ЛЕС =====
+    public static int forestChestEnderPearlMin     = 1; public static int forestChestEnderPearlMax     = 3;
+    public static int forestChestAncientLogMin     = 2; public static int forestChestAncientLogMax     = 6;
+    public static int forestChestBoneMin           = 1; public static int forestChestBoneMax           = 4;
+    public static int forestChestVoidPearMin       = 1; public static int forestChestVoidPearMax       = 2;
+
     // ===== МОСТЫ =====
 
     public static boolean enableBridges        = true;
@@ -251,6 +257,16 @@ public class ConfigHandler {
         fortressChestGoldenAppleMax= config.getInt("fortressChestGoldenAppleMax",cat, 1, 0, 64, "");
         fortressChestEnderPearlMin = config.getInt("fortressChestEnderPearlMin", cat, 2, 0, 64, "");
         fortressChestEnderPearlMax = config.getInt("fortressChestEnderPearlMax", cat, 5, 0, 64, "");
+
+        // Лес
+        forestChestEnderPearlMin   = config.getInt("forestChestEnderPearlMin",   cat, 1, 0, 64, "");
+        forestChestEnderPearlMax   = config.getInt("forestChestEnderPearlMax",   cat, 3, 0, 64, "");
+        forestChestAncientLogMin   = config.getInt("forestChestAncientLogMin",   cat, 2, 0, 64, "");
+        forestChestAncientLogMax   = config.getInt("forestChestAncientLogMax",   cat, 6, 0, 64, "");
+        forestChestBoneMin         = config.getInt("forestChestBoneMin",         cat, 1, 0, 64, "");
+        forestChestBoneMax         = config.getInt("forestChestBoneMax",         cat, 4, 0, 64, "");
+        forestChestVoidPearMin     = config.getInt("forestChestVoidPearMin",     cat, 1, 0, 64, "");
+        forestChestVoidPearMax     = config.getInt("forestChestVoidPearMax",     cat, 2, 0, 64, "");
     }
 
     private static void loadMiscSettings() {
@@ -273,5 +289,14 @@ public class ConfigHandler {
         if (biome == EndBiomes.biomeJungle)    return jungleSpawnChance;
         if (biome == EndBiomes.biomeForest)    return forestSpawnChance;
         return 25;
+    }
+
+    public static int getRandomAmount(java.util.Random rand, int min, int max) {
+        if (max < min) {
+            int t = min;
+            min = max;
+            max = t;
+        }
+        return min + rand.nextInt(Math.max(1, max - min + 1));
     }
 }

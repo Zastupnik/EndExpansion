@@ -6,6 +6,8 @@ import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraft.world.biome.BiomeGenBase;
 import com.zastupnik.endexpansion.world.biome.EndBiomes;
 import com.zastupnik.endexpansion.handler.ConfigHandler;
+import net.minecraft.block.Block;
+import net.minecraft.init.Blocks;
 
 import java.util.*;
 
@@ -38,11 +40,8 @@ public class WorldGenManager implements IWorldGenerator {
                 ^ ((long) chunkX * 341873128712L)
                 ^ ((long) chunkZ * 132897987541L));
 
-        // Базовая частота: 1 из 60 чанков начинает кластер или одиночный остров.
-        // Реально редко — с учётом проверки пересечений ещё реже.
-        if (rand.nextInt(60) != 0) return;
-
         BiomeGenBase biome = selectBiome(rand);
+        if (rand.nextInt(ConfigHandler.getSpawnChance(biome)) != 0) return;
 
         // 30% шанс — кластер (2–4 острова рядом), 70% — одиночный
         if (rand.nextInt(10) < 3) {
@@ -74,8 +73,57 @@ public class WorldGenManager implements IWorldGenerator {
             if (placed != null) clusterIslands.add(placed);
         }
 
-        // TODO: Мосты между clusterIslands (когда будет готов DecoratorBridge)
-        // buildBridges(world, rand, clusterIslands);
+        buildBridges(world, rand, clusterIslands);
+    }
+
+
+    private void buildBridges(World world, Random rand, List<int[]> clusterIslands) {
+        if (!ConfigHandler.enableBridges || clusterIslands.size() < 2) return;
+
+        for (int i = 0; i < clusterIslands.size(); i++) {
+            int[] a = clusterIslands.get(i);
+            for (int j = i + 1; j < clusterIslands.size(); j++) {
+                int[] b = clusterIslands.get(j);
+
+                int dx = b[0] - a[0];
+                int dz = b[1] - a[1];
+                int centerDist = (int) Math.sqrt(dx * dx + dz * dz);
+                int edgeDist = centerDist - a[2] - b[2];
+                if (edgeDist < 8 || edgeDist > ConfigHandler.bridgeMaxDistance) continue;
+                if (rand.nextInt(100) > 55) continue;
+
+                int startX = a[0] + (int) (dx / (double) centerDist * (a[2] - 3));
+                int startZ = a[1] + (int) (dz / (double) centerDist * (a[2] - 3));
+                int endX = b[0] - (int) (dx / (double) centerDist * (b[2] - 3));
+                int endZ = b[1] - (int) (dz / (double) centerDist * (b[2] - 3));
+                int y = Math.max(35, Math.min(140, (int) ((world.getTopSolidOrLiquidBlock(startX, startZ) + world.getTopSolidOrLiquidBlock(endX, endZ)) / 2.0)));
+                placeBridge(world, startX, startZ, endX, endZ, y);
+            }
+        }
+    }
+
+    private void placeBridge(World world, int x1, int z1, int x2, int z2, int y) {
+        int dx = x2 - x1;
+        int dz = z2 - z1;
+        int steps = Math.max(Math.abs(dx), Math.abs(dz));
+        if (steps <= 0) return;
+
+        Block floor = ConfigHandler.bridgeWitheredPlanks ? com.zastupnik.endexpansion.EndExpansion.witheredLog : Blocks.end_stone;
+
+        for (int i = 0; i <= steps; i++) {
+            float t = i / (float) steps;
+            int bx = x1 + Math.round(dx * t);
+            int bz = z1 + Math.round(dz * t);
+            int by = y + (int) (Math.sin(t * Math.PI) * 2);
+
+            world.setBlock(bx, by, bz, floor, 0, 2);
+            world.setBlock(bx, by - 1, bz, floor, 0, 2);
+
+            if (i % 4 == 0) {
+                world.setBlock(bx + 1, by + 1, bz, floor, 0, 2);
+                world.setBlock(bx - 1, by + 1, bz, floor, 0, 2);
+            }
+        }
     }
 
     /**
@@ -136,13 +184,13 @@ public class WorldGenManager implements IWorldGenerator {
      * Пустыня 300×200 = radius ~100–150 при scaleX=2.0, scaleZ=1.3.
      */
     private int getRadius(BiomeGenBase biome, Random rand) {
-        if (biome == EndBiomes.biomeCemetery)  return 80  + rand.nextInt(120); // 80–200
-        if (biome == EndBiomes.biomeFortress)  return 60  + rand.nextInt(90);  // 60–150
-        if (biome == EndBiomes.biomeJungle)    return 50  + rand.nextInt(100); // 50–150
-        if (biome == EndBiomes.biomeForest)    return 40  + rand.nextInt(80);  // 40–120
-        if (biome == EndBiomes.biomeOcean)     return 60  + rand.nextInt(100); // 60–160
-        if (biome == EndBiomes.biomeDesert)    return 70  + rand.nextInt(130); // 70–200  ← большие пустыни
-        if (biome == EndBiomes.biomeInfection) return 25  + rand.nextInt(50);  // 25–75   ← маленькие жуткие
+        if (biome == EndBiomes.biomeCemetery)  return ConfigHandler.getRandomAmount(rand, ConfigHandler.cemeteryRadiusMin, Math.min(150, ConfigHandler.cemeteryRadiusMax));
+        if (biome == EndBiomes.biomeFortress)  return ConfigHandler.getRandomAmount(rand, ConfigHandler.fortressRadiusMin, ConfigHandler.fortressRadiusMax);
+        if (biome == EndBiomes.biomeJungle)    return ConfigHandler.getRandomAmount(rand, ConfigHandler.jungleRadiusMin, ConfigHandler.jungleRadiusMax);
+        if (biome == EndBiomes.biomeForest)    return ConfigHandler.getRandomAmount(rand, ConfigHandler.forestRadiusMin, ConfigHandler.forestRadiusMax);
+        if (biome == EndBiomes.biomeOcean)     return ConfigHandler.getRandomAmount(rand, ConfigHandler.oceanRadiusMin, ConfigHandler.oceanRadiusMax);
+        if (biome == EndBiomes.biomeDesert)    return ConfigHandler.getRandomAmount(rand, ConfigHandler.desertRadiusMin, ConfigHandler.desertRadiusMax);
+        if (biome == EndBiomes.biomeInfection) return ConfigHandler.getRandomAmount(rand, ConfigHandler.infectionRadiusMin, ConfigHandler.infectionRadiusMax);
         return 40 + rand.nextInt(60);
     }
 
