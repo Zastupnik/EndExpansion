@@ -16,8 +16,10 @@ public class DecoratorOcean implements IEndBiomeDecorator {
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
         int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
 
-        // 1. Пирс с домиком — 1-2 штуки
-        int pierCount = 1 + rand.nextInt(2);
+        generateOceanBasins(world, rand, centerX, centerZ, Math.max(16, radius - 6));
+
+        // 1. Пирс с домиком — 1-3 штуки
+        int pierCount = 1 + rand.nextInt(3);
         for (int i = 0; i < pierCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius / 2);
             int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
@@ -31,6 +33,24 @@ public class DecoratorOcean implements IEndBiomeDecorator {
             int y = findWaterSurface(world, pos[0], pos[1]);
             if (y > 0) {
                 generateSunkenShip(world, rand, pos[0], y, pos[1]);
+            }
+        }
+    }
+
+    private void generateOceanBasins(World world, Random rand, int centerX, int centerZ, int radius) {
+        int basinCount = 3 + rand.nextInt(3);
+        for (int i = 0; i < basinCount; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, radius);
+            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
+            int r = 5 + rand.nextInt(4);
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (dx * dx + dz * dz > r * r) continue;
+                    world.setBlock(pos[0] + dx, y - 1, pos[1] + dz, Blocks.water, 0, 2);
+                    if (rand.nextInt(7) == 0) {
+                        setIfAir(world, pos[0] + dx, y, pos[1] + dz, EndExpansion.seaCrystal);
+                    }
+                }
             }
         }
     }

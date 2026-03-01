@@ -21,7 +21,7 @@ public class DecoratorFortress implements IEndBiomeDecorator {
         int y = world.getTopSolidOrLiquidBlock(centerX, centerZ);
 
         // 1. Внешние стены с воротами
-        int wallRadius = 25 + rand.nextInt(10); // 25-34
+        int wallRadius = Math.min(Math.max(28, radius - 10), 52); // масштаб по размеру острова
         generateOuterWalls(world, rand, centerX, y, centerZ, wallRadius);
 
         // 2. Башни по углам (4 штуки)
@@ -52,6 +52,26 @@ public class DecoratorFortress implements IEndBiomeDecorator {
                 centerX - wallRadius / 2, y, centerZ - wallRadius / 2);
         generateFortressPath(world, centerX, y, centerZ,
                 centerX + wallRadius / 2, y, centerZ - wallRadius / 2);
+
+        spawnGuardPatrols(world, rand, centerX, y + 1, centerZ, wallRadius);
+    }
+
+    private void spawnGuardPatrols(World world, Random rand, int centerX, int y, int centerZ, int wallRadius) {
+        int patrols = 6 + rand.nextInt(4);
+        for (int i = 0; i < patrols; i++) {
+            int px = centerX - wallRadius + rand.nextInt(wallRadius * 2 + 1);
+            int pz = centerZ - wallRadius + rand.nextInt(wallRadius * 2 + 1);
+            if (!world.isAirBlock(px, y, pz)) continue;
+            world.setBlock(px, y, pz, Blocks.mob_spawner, 0, 2);
+            net.minecraft.tileentity.TileEntityMobSpawner spawner =
+                    (net.minecraft.tileentity.TileEntityMobSpawner) world.getTileEntity(px, y, pz);
+            if (spawner != null) {
+                net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+                spawner.writeToNBT(nbt);
+                nbt.setString("EntityId", rand.nextInt(3) == 0 ? "CaveSpider" : "Enderman");
+                spawner.readFromNBT(nbt);
+            }
+        }
     }
 
     // ===== ВНЕШНИЕ СТЕНЫ =====

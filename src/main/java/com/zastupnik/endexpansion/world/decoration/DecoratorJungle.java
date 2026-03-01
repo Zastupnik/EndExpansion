@@ -18,7 +18,7 @@ public class DecoratorJungle implements IEndBiomeDecorator {
         int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
 
         // 1. Сначала генерируем деревья — мосты будут между ними
-        int treeCount = 4 + rand.nextInt(4);
+        int treeCount = 6 + rand.nextInt(5);
         int[][] treePositions = new int[treeCount][3];
 
         for (int i = 0; i < treeCount; i++) {
@@ -47,6 +47,22 @@ public class DecoratorJungle implements IEndBiomeDecorator {
             int[] pos = randomPos(rand, centerX, centerZ, radius / 2);
             int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
             generateWaterfall(world, rand, pos[0], y, pos[1]);
+        }
+
+        generateJungleUndergrowth(world, rand, centerX, centerZ, radius);
+    }
+
+    private void generateJungleUndergrowth(World world, Random rand, int centerX, int centerZ, int radius) {
+        int plants = 18 + rand.nextInt(12);
+        for (int i = 0; i < plants; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, radius);
+            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
+            if (world.getBlock(pos[0], y - 1, pos[1]) != EndExpansion.jungleTurf) continue;
+            if (rand.nextInt(3) == 0) {
+                setIfAir(world, pos[0], y, pos[1], EndExpansion.spectralRose);
+            } else {
+                setIfAir(world, pos[0], y, pos[1], EndExpansion.witheredLeaves);
+            }
         }
     }
 
