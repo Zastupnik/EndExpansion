@@ -93,7 +93,9 @@ public class EndIslandGenerator {
     // ===== ВЫСОТА И ТОЛЩИНА =====
 
     private int getIslandY(Random rand) {
-        return 72 + rand.nextInt(54); // 72–125
+        // Сужаем диапазон, чтобы избежать экстремально высоких/низких островов
+        // и удерживать архипелаг в читаемом игровом слое.
+        return 80 + rand.nextInt(35); // 80–114
     }
 
     /**
@@ -103,9 +105,9 @@ public class EndIslandGenerator {
      */
     private int pickThickness(Random rand) {
         int r = rand.nextInt(10);
-        if (r < 3) return 18 + rand.nextInt(10); // 30% → 18–27
-        if (r < 8) return 28 + rand.nextInt(17); // 50% → 28–44
-        return 45 + rand.nextInt(16);            // 20% → 45–60
+        if (r < 2) return 20 + rand.nextInt(8);  // 20% → 20–27
+        if (r < 8) return 28 + rand.nextInt(15); // 60% → 28–42
+        return 40 + rand.nextInt(13);            // 20% → 40–52
     }
 
     // ===== ВЫБОР ФОРМЫ =====
@@ -522,6 +524,7 @@ public class EndIslandGenerator {
         int reliefRadius = Math.max(14, (int)(radius * 0.85F));
         double phaseX = rand.nextDouble() * Math.PI * 2.0D;
         double phaseZ = rand.nextDouble() * Math.PI * 2.0D;
+        double ridgePhase = rand.nextDouble() * Math.PI * 2.0D;
         Block topBlock = getTopBlock(biome);
         Block fillerBlock = getFillerBlock(biome, rand);
 
@@ -536,15 +539,16 @@ public class EndIslandGenerator {
                 if (topY < cy - 24 || topY > cy + 28) continue;
 
                 double edgeFactor = 1.0D - (dist / reliefRadius);
-                double macro = Math.sin(x * 0.07D + phaseX) + Math.cos(z * 0.06D + phaseZ);
-                double micro = Math.sin((x + z) * 0.19D + phaseX * 0.5D);
-                int delta = (int)Math.round(edgeFactor * (macro * 1.8D + micro * 0.9D));
+                double macro = Math.sin(x * 0.055D + phaseX) + Math.cos(z * 0.052D + phaseZ);
+                double ridge = Math.sin((x * 0.09D - z * 0.075D) + ridgePhase) * 1.1D;
+                double micro = Math.sin((x + z) * 0.165D + phaseX * 0.5D) * 0.8D;
+                int delta = (int)Math.round(edgeFactor * (macro * 1.5D + ridge + micro));
 
                 // Кладбище почти ровное, но не абсолютно плоское.
                 if (biome == EndBiomes.biomeCemetery) {
                     delta = Math.max(-1, Math.min(1, delta));
                 } else {
-                    delta = Math.max(-4, Math.min(4, delta));
+                    delta = Math.max(-3, Math.min(5, delta));
                 }
 
                 if (delta > 0) {
@@ -651,7 +655,7 @@ public class EndIslandGenerator {
 
     private void erodeIslandEdges(World world, Random rand, int cx, int cy, int cz, int radius, Block top, Block filler) {
         int outer = Math.max(8, radius);
-        int inner = (int)(outer * 0.74F);
+        int inner = (int)(outer * 0.70F);
 
         for (int dx = -outer; dx <= outer; dx++) {
             for (int dz = -outer; dz <= outer; dz++) {
@@ -664,7 +668,7 @@ public class EndIslandGenerator {
                 if (topY < cy - 24 || topY > cy + 28) continue;
 
                 int hash = Math.abs(dx * 37 + dz * 57);
-                int carve = hash % 3;
+                int carve = hash % 4;
                 if (rand.nextInt(4) == 0) carve++;
 
                 for (int i = 0; i < carve; i++) {
@@ -685,7 +689,7 @@ public class EndIslandGenerator {
 
     private void populateIslandDetails(World world, Random rand, int cx, int cy, int cz,
                                        BiomeGenBase biome, int radius) {
-        int featureCount = Math.max(18, radius / 2) + rand.nextInt(Math.max(8, radius / 2));
+        int featureCount = Math.max(36, radius) + rand.nextInt(Math.max(20, radius));
         Block accent = (biome == EndBiomes.biomeOcean && EndExpansion.coralStoneEnd != null)
                 ? EndExpansion.coralStoneEnd
                 : (EndExpansion.mossyAshenStone != null ? EndExpansion.mossyAshenStone : Blocks.end_stone);
@@ -698,21 +702,50 @@ public class EndIslandGenerator {
             int y = world.getTopSolidOrLiquidBlock(x, z);
             if (y < cy - 28 || y > cy + 30) continue;
 
-            if (rand.nextInt(5) == 0) {
-                int h = 1 + rand.nextInt(3);
+            if (rand.nextInt(4) == 0) {
+                int h = 1 + rand.nextInt(4);
                 for (int dy = 0; dy < h; dy++) {
                     if (world.isAirBlock(x, y + dy, z)) {
                         world.setBlock(x, y + dy, z, accent, 0, 2);
                     }
                 }
             } else {
-                int ring = 1 + rand.nextInt(2);
+                int ring = 1 + rand.nextInt(3);
                 for (int dx = -ring; dx <= ring; dx++) {
                     for (int dz = -ring; dz <= ring; dz++) {
                         if (dx * dx + dz * dz > ring * ring) continue;
-                        if (rand.nextInt(3) == 0) continue;
+                        if (rand.nextInt(4) == 0) continue;
                         int py = world.getTopSolidOrLiquidBlock(x + dx, z + dz) - 1;
                         if (py >= cy - 30) world.setBlock(x + dx, py, z + dz, accent, 0, 2);
+                    }
+                }
+            }
+        }
+
+        // Дополнительные мини-скопления, чтобы крупные острова выглядели насыщенными
+        int clusterCount = Math.max(5, radius / 9);
+        for (int i = 0; i < clusterCount; i++) {
+            float a = rand.nextFloat() * (float)(Math.PI * 2);
+            float d = 5 + rand.nextFloat() * (radius * 0.88F);
+            int baseX = cx + (int)(Math.cos(a) * d);
+            int baseZ = cz + (int)(Math.sin(a) * d);
+            int baseY = world.getTopSolidOrLiquidBlock(baseX, baseZ);
+            if (baseY < cy - 26 || baseY > cy + 30) continue;
+
+            int blobR = 2 + rand.nextInt(3);
+            for (int dx = -blobR; dx <= blobR; dx++) {
+                for (int dz = -blobR; dz <= blobR; dz++) {
+                    if (dx * dx + dz * dz > blobR * blobR) continue;
+                    if (rand.nextInt(5) == 0) continue;
+
+                    int x = baseX + dx;
+                    int z = baseZ + dz;
+                    int y = world.getTopSolidOrLiquidBlock(x, z) - 1;
+                    if (y < cy - 30 || y > cy + 30) continue;
+
+                    world.setBlock(x, y, z, accent, 0, 2);
+                    if (rand.nextInt(4) == 0 && world.isAirBlock(x, y + 1, z)) {
+                        world.setBlock(x, y + 1, z, accent, 0, 2);
                     }
                 }
             }
