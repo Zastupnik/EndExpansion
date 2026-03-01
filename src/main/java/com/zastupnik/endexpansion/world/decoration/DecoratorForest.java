@@ -1,6 +1,7 @@
 package com.zastupnik.endexpansion.world.decoration;
 
 import com.zastupnik.endexpansion.EndExpansion;
+import com.zastupnik.endexpansion.world.gen.EndIslandGenerator;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
@@ -14,33 +15,48 @@ public class DecoratorForest implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
-        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
+        // 1. Много деревьев, чтобы остров выглядел живым.
+        EndIslandGenerator gen = new EndIslandGenerator();
+        int treeCount = Math.max(10, radius / 3) + rand.nextInt(Math.max(3, radius / 4));
+        for (int i = 0; i < treeCount; i++) {
+            int[] pos = randomPos(rand, centerX, centerZ, Math.max(10, radius - 6));
+            int y = findGroundY(world, pos[0], pos[1]);
+            if (y < 2) continue;
+            if (isForestGround(world, pos[0], y - 1, pos[1]) && hasHeadroom(world, pos[0], y, pos[1], 8)) {
+                gen.generateGnarledTree(world, rand, pos[0], y, pos[1]);
+            }
+        }
 
-        // 1. Руины — 2-4 штуки на остров
+        // 2. Руины — 2-4 штуки на остров
         int ruinCount = 2 + rand.nextInt(3);
         for (int i = 0; i < ruinCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius);
-            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
+            int y = findGroundY(world, pos[0], pos[1]);
+            if (y < 2 || !isForestGround(world, pos[0], y - 1, pos[1])) continue;
             generateRuin(world, rand, pos[0], y, pos[1]);
+            sinkSupportPillars(world, pos[0], y - 1, pos[1], 4, EndExpansion.ashenStone);
         }
 
-        // 2. Полые стволы — 3-5 штук
+        // 3. Полые стволы — 3-5 штук
         int hollowCount = 3 + rand.nextInt(3);
         for (int i = 0; i < hollowCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius);
-            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
-            if (world.getBlock(pos[0], y - 1, pos[1]) == EndExpansion.forestMoss) {
+            int y = findGroundY(world, pos[0], pos[1]);
+            if (y < 2) continue;
+            if (isForestGround(world, pos[0], y - 1, pos[1])) {
                 generateHollowLog(world, rand, pos[0], y, pos[1]);
             }
         }
 
-        // 3. Хижины из пней — 1-2 штуки
+        // 4. Хижины из пней — 1-2 штуки
         int hutCount = 1 + rand.nextInt(2);
         for (int i = 0; i < hutCount; i++) {
             int[] pos = randomPos(rand, centerX, centerZ, radius / 2);
-            int y = world.getTopSolidOrLiquidBlock(pos[0], pos[1]);
-            if (world.getBlock(pos[0], y - 1, pos[1]) == EndExpansion.forestMoss) {
+            int y = findGroundY(world, pos[0], pos[1]);
+            if (y < 2) continue;
+            if (isForestGround(world, pos[0], y - 1, pos[1])) {
                 generateStumpHut(world, rand, pos[0], y, pos[1]);
+                sinkSupportPillars(world, pos[0] + 2, y - 1, pos[1] + 2, 5, EndExpansion.witheredLog);
             }
         }
     }
@@ -225,6 +241,35 @@ public class DecoratorForest implements IEndBiomeDecorator {
     }
 
     // ===== УТИЛИТЫ =====
+
+
+    private int findGroundY(World world, int x, int z) {
+        int y = world.getTopSolidOrLiquidBlock(x, z);
+        while (y > 2 && world.isAirBlock(x, y - 1, z)) y--;
+        return y;
+    }
+
+    private boolean isForestGround(World world, int x, int y, int z) {
+        Block b = world.getBlock(x, y, z);
+        return b == EndExpansion.forestMoss || b == EndExpansion.ashenStone || b == Blocks.dirt || b == Blocks.end_stone;
+    }
+
+    private boolean hasHeadroom(World world, int x, int y, int z, int h) {
+        for (int i = 0; i < h; i++) if (!world.isAirBlock(x, y + i, z)) return false;
+        return true;
+    }
+
+    private void sinkSupportPillars(World world, int x, int y, int z, int halfSize, Block block) {
+        for (int dx = -halfSize; dx <= halfSize; dx += Math.max(1, halfSize)) {
+            for (int dz = -halfSize; dz <= halfSize; dz += Math.max(1, halfSize)) {
+                int py = y;
+                while (py > 2 && world.isAirBlock(x + dx, py, z + dz)) {
+                    world.setBlock(x + dx, py, z + dz, block, 0, 2);
+                    py--;
+                }
+            }
+        }
+    }
 
     private void setIfAir(World world, int x, int y, int z, Block block) {
         if (world.isAirBlock(x, y, z)) {

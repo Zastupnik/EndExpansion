@@ -27,13 +27,21 @@ public class EndIslandGenerator {
 
             if (i > 0) {
                 float a    = rand.nextFloat() * (float)(Math.PI * 2);
-                int   dist = 60 + rand.nextInt(120); // 60–180 блоков между центрами
+                int   dist = 70 + rand.nextInt(131); // 70–200 блоков между центрами
                 ox = cx + (int)(Math.cos(a) * dist);
                 oz = cz + (int)(Math.sin(a) * dist);
                 oy = mainY + rand.nextInt(21) - 10;  // ±10 по высоте
             }
 
-            int radius    = Math.max(24, baseRadius + rand.nextInt(13) - 6);
+            int radius;
+            if (i == 0) {
+                radius = Math.max(48, baseRadius + 8 + rand.nextInt(17));
+            } else if (rand.nextInt(8) == 0) {
+                // Маленькие островки только в кластерах и редко.
+                radius = Math.max(24, baseRadius / 2 + rand.nextInt(8));
+            } else {
+                radius = Math.max(40, baseRadius + rand.nextInt(15) - 3);
+            }
             int thickness = pickThickness(rand);
 
             Block top    = getTopBlock(biome);
@@ -44,6 +52,7 @@ public class EndIslandGenerator {
 
             // ===== генерация =====
             generateShape(world, rand, ox, oy, oz, radius, thickness, top, filler, biome);
+            applySurfaceRelief(world, rand, ox, oy, oz, radius, biome);
             decorateIsland(world, rand, ox, oy, oz, biome, radius);
 
             if (rand.nextInt(3) != 0)
@@ -87,7 +96,7 @@ public class EndIslandGenerator {
     // ===== ВЫСОТА И ТОЛЩИНА =====
 
     private int getIslandY(Random rand) {
-        return 60 + rand.nextInt(101); // 60–160
+        return 65 + rand.nextInt(91); // 65–155
     }
 
     /**
@@ -109,7 +118,7 @@ public class EndIslandGenerator {
                                int R, int thickness,
                                Block top, Block filler, BiomeGenBase biome) {
 
-        int roll = rand.nextInt(12);
+        int roll = rand.nextInt(20);
 
         boolean generated = false;
 
@@ -117,19 +126,15 @@ public class EndIslandGenerator {
             generateOval(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
             generated = true;
         }
-        else if (roll < 4) {
-            generateLShape(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
-            generated = true;
-        }
-        else if (roll < 6) {
+        else if (roll < 5) {
             generateCrescent(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
             generated = true;
         }
-        else if (roll < 8) {
+        else if (roll < 9) {
             generateRidge(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
             generated = true;
         }
-        else if (roll < 10) {
+        else if (roll < 16) {
             generateBlob(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
             generated = true;
         }
@@ -489,9 +494,62 @@ public class EndIslandGenerator {
     private Block pickBody(Block top, Block filler, int dy, int thickness, int dx, int dz) {
         if (dy == 0) return top;
         if (dy >= thickness - 3) return Blocks.end_stone;
-        // Жилы эндерняка внутри — через XOR-хэш (без вызова Random)
-        if (dy > 2 && ((dx * 3 ^ dz * 7 ^ dy * 13) & 15) == 0) return Blocks.end_stone;
+
+        // Для не-эндерняковых биомов почти убираем прожилки,
+        // чтобы не было случайных артефактных пятен из end_stone.
+        if (filler == Blocks.end_stone) {
+            if (dy > 2 && ((dx * 3 ^ dz * 7 ^ dy * 13) & 7) == 0) return Blocks.end_stone;
+        } else if (dy > 4 && ((dx * 5 ^ dz * 11 ^ dy * 3) & 63) == 0) {
+            return Blocks.end_stone;
+        }
+
         return filler;
+    }
+
+    /**
+     * Делает верх острова неровным: мягкие бугры и ложбины вместо плато.
+     */
+    private void applySurfaceRelief(World world, Random rand, int cx, int cy, int cz,
+                                    int radius, BiomeGenBase biome) {
+        int reliefRadius = Math.max(14, (int)(radius * 0.85F));
+        double phaseX = rand.nextDouble() * Math.PI * 2.0D;
+        double phaseZ = rand.nextDouble() * Math.PI * 2.0D;
+        Block topBlock = getTopBlock(biome);
+        Block fillerBlock = getFillerBlock(biome, rand);
+
+        for (int dx = -reliefRadius; dx <= reliefRadius; dx++) {
+            for (int dz = -reliefRadius; dz <= reliefRadius; dz++) {
+                double dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist > reliefRadius) continue;
+
+                int x = cx + dx;
+                int z = cz + dz;
+                int topY = world.getTopSolidOrLiquidBlock(x, z);
+                if (topY < cy - 24 || topY > cy + 28) continue;
+
+                double edgeFactor = 1.0D - (dist / reliefRadius);
+                double wave = Math.sin(x * 0.12D + phaseX) + Math.cos(z * 0.10D + phaseZ);
+                int delta = (int)Math.round(edgeFactor * wave * 1.8D);
+
+                // Кладбище почти ровное, но не абсолютно плоское.
+                if (biome == EndBiomes.biomeCemetery) {
+                    delta = Math.max(-1, Math.min(1, delta));
+                }
+
+                if (delta > 0) {
+                    for (int i = 0; i < delta; i++) {
+                        world.setBlock(x, topY + i, z, i == delta - 1 ? topBlock : fillerBlock, 0, 2);
+                    }
+                } else if (delta < 0) {
+                    for (int i = 0; i < -delta; i++) {
+                        int yy = topY - i;
+                        if (!world.isAirBlock(x, yy, z)) {
+                            world.setBlock(x, yy, z, Blocks.air, 0, 2);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ===== УТИЛИТЫ =====
