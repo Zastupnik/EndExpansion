@@ -5,44 +5,101 @@ import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.tileentity.TileEntityChest;
 import net.minecraft.world.World;
-import net.minecraft.world.gen.structure.StructureVillagePieces;
-
 import java.util.Random;
 
 public class DecoratorCemetery implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
+        int effectiveRadius = Math.min(150, Math.max(36, radius));
         int groundedCenterY = Math.max(40, findGroundY(world, centerX, centerZ));
+        generateMainPaths(world, rand, centerX, groundedCenterY, centerZ, effectiveRadius);
+        generatePerimeterFence(world, centerX, centerZ, groundedCenterY, effectiveRadius);
+
         // 1. Генерируем домик хранителя в центре острова
         generateKeeperHouse(world, rand, centerX, groundedCenterY, centerZ);
         anchorRect(world, centerX, groundedCenterY - 1, centerZ, 7, 7, EndExpansion.ashenStone);
 
+        if (effectiveRadius > 70) {
+            int sideHouseCount = 1 + rand.nextInt(2);
+            for (int i = 0; i < sideHouseCount; i++) {
+                int[] pos = randomPos(rand, centerX, centerZ, effectiveRadius - 12);
+                int sideY = Math.max(40, findGroundY(world, pos[0], pos[1]));
+                generateKeeperHouse(world, rand, pos[0], sideY, pos[1]);
+                generatePathTo(world, centerX, centerZ, pos[0], pos[1]);
+            }
+        }
+
         // 2. Генерируем участки с могилами вокруг
-        int plotCount = 4 + rand.nextInt(5); // 4-8 участков
+        int plotCount = 6 + rand.nextInt(6) + effectiveRadius / 40; // 6-15 участков
         for (int i = 0; i < plotCount; i++) {
             int angle = rand.nextInt(360);
-            int dist  = 12 + rand.nextInt(Math.max(6, radius / 2));
+            int dist  = 12 + rand.nextInt(Math.max(10, effectiveRadius - 10));
             int px    = centerX + (int)(Math.cos(Math.toRadians(angle)) * dist);
             int pz    = centerZ + (int)(Math.sin(Math.toRadians(angle)) * dist);
             int py    = findGroundY(world, px, pz);
 
             generateGravePlot(world, rand, px, py, pz);
             anchorRect(world, px, py - 1, pz, 9, 9, EndExpansion.ashenStone);
+            generatePathTo(world, centerX, centerZ, px, pz);
         }
 
         // 3. Склепы — редко, 1-2 на остров
-        int cryptCount = 1 + rand.nextInt(2);
+        int cryptCount = 1 + rand.nextInt(2) + (effectiveRadius > 90 ? 1 : 0);
         for (int i = 0; i < cryptCount; i++) {
             int angle = rand.nextInt(360);
-            int dist  = 18 + rand.nextInt(Math.max(5, radius / 3));
+            int dist  = 18 + rand.nextInt(Math.max(5, effectiveRadius / 2));
             int cx    = centerX + (int)(Math.cos(Math.toRadians(angle)) * dist);
             int cz    = centerZ + (int)(Math.sin(Math.toRadians(angle)) * dist);
             int cy    = findGroundY(world, cx, cz);
 
             generateCrypt(world, rand, cx, cy, cz);
             anchorRect(world, cx, cy - 1, cz, 5, 6, EndExpansion.fortressBrick);
+            generatePathTo(world, centerX, centerZ, cx, cz);
         }
+    }
+
+    private void generatePerimeterFence(World world, int centerX, int centerZ, int centerY, int radius) {
+        for (int i = 0; i < 360; i += 5) {
+            int px = centerX + (int) (Math.cos(Math.toRadians(i)) * radius);
+            int pz = centerZ + (int) (Math.sin(Math.toRadians(i)) * radius);
+            int py = Math.max(centerY - 2, findGroundY(world, px, pz));
+            world.setBlock(px, py, pz, EndExpansion.gravestone, 0, 2);
+            if (i % 20 == 0) {
+                setIfAir(world, px, py + 1, pz, EndExpansion.endTorch);
+            }
+        }
+    }
+
+    private void generateMainPaths(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
+        int spokes = 4 + rand.nextInt(3);
+        for (int i = 0; i < spokes; i++) {
+            int angle = i * (360 / spokes) + rand.nextInt(20) - 10;
+            int targetX = centerX + (int) (Math.cos(Math.toRadians(angle)) * radius);
+            int targetZ = centerZ + (int) (Math.sin(Math.toRadians(angle)) * radius);
+            generatePathTo(world, centerX, centerZ, targetX, targetZ);
+        }
+    }
+
+    private void generatePathTo(World world, int fromX, int fromZ, int toX, int toZ) {
+        int dx = toX - fromX;
+        int dz = toZ - fromZ;
+        int steps = Math.max(1, Math.max(Math.abs(dx), Math.abs(dz)));
+        for (int i = 0; i <= steps; i++) {
+            int px = fromX + dx * i / steps;
+            int pz = fromZ + dz * i / steps;
+            int py = world.getTopSolidOrLiquidBlock(px, pz);
+            world.setBlock(px, py - 1, pz, EndExpansion.ashenStone, 0, 2);
+            if (i % 8 == 0) {
+                setIfAir(world, px + 1, py, pz, EndExpansion.endTorch);
+            }
+        }
+    }
+
+    private int[] randomPos(Random rand, int centerX, int centerZ, int radius) {
+        int x = centerX - radius + rand.nextInt(radius * 2 + 1);
+        int z = centerZ - radius + rand.nextInt(radius * 2 + 1);
+        return new int[]{x, z};
     }
 
     // ===== ДОМИК ХРАНИТЕЛЯ =====
