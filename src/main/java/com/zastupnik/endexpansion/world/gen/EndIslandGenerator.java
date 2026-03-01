@@ -10,7 +10,9 @@ import net.minecraft.world.World;
 import net.minecraft.world.biome.BiomeGenBase;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 public class EndIslandGenerator {
@@ -150,11 +152,11 @@ public class EndIslandGenerator {
             generateCrescent(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
             generated = true;
         }
-        else if (roll < 9) {
+        else if (roll < 7) {
             generateRidge(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
             generated = true;
         }
-        else if (roll < 16) {
+        else if (roll < 15) {
             generateBlob(world, rand, cx, cy, cz, R, thickness, top, filler, biome);
             generated = true;
         }
@@ -361,7 +363,8 @@ public class EndIslandGenerator {
         float angle  = rand.nextFloat() * (float)Math.PI;
         float cosA   = (float)Math.cos(angle);
         float sinA   = (float)Math.sin(angle);
-        int   length = (int)(R * (1.5F + rand.nextFloat() * 1.5F));
+        // Сильное ограничение длины хребта: убираем «артефактные мосты» между зонами.
+        int   length = (int)(R * (0.65F + rand.nextFloat() * 0.55F));
         float width  = R * (0.2F + rand.nextFloat() * 0.3F);
 
         for (int step = -length; step <= length; step++) {
@@ -549,6 +552,7 @@ public class EndIslandGenerator {
         double ridgePhase = rand.nextDouble() * Math.PI * 2.0D;
         Block topBlock = getTopBlock(biome);
         Block fillerBlock = getFillerBlock(biome, rand);
+        HeightCache cache = new HeightCache();
 
         for (int dx = -reliefRadius; dx <= reliefRadius; dx++) {
             for (int dz = -reliefRadius; dz <= reliefRadius; dz++) {
@@ -557,7 +561,7 @@ public class EndIslandGenerator {
 
                 int x = cx + dx;
                 int z = cz + dz;
-                int topY = world.getTopSolidOrLiquidBlock(x, z);
+                int topY = getSurfaceY(world, cache, x, z, cy - 26, cy + 30);
                 if (topY < cy - 24 || topY > cy + 28) continue;
 
                 double edgeFactor = 1.0D - (dist / reliefRadius);
@@ -579,7 +583,8 @@ public class EndIslandGenerator {
                         world.setBlock(x, topY + i, z, i == delta - 1 ? topBlock : fillerBlock, 0, 2);
                     }
                 } else if (delta < 0) {
-                    for (int i = 0; i < -delta; i++) {
+                    int carveDepth = Math.min(2, -delta);
+                    for (int i = 0; i < carveDepth; i++) {
                         int yy = topY - i;
                         if (!world.isAirBlock(x, yy, z)) {
                             world.setBlock(x, yy, z, Blocks.air, 0, 2);
@@ -589,7 +594,7 @@ public class EndIslandGenerator {
             }
         }
 
-        erodeIslandEdges(world, rand, cx, cy, cz, radius, topBlock, fillerBlock);
+        erodeIslandEdges(world, rand, cx, cy, cz, radius, topBlock, fillerBlock, cache);
     }
 
     // ===== УТИЛИТЫ =====
@@ -688,7 +693,8 @@ public class EndIslandGenerator {
         populateIslandDetails(world, rand, cx, cy, cz, biome, radius);
     }
 
-    private void erodeIslandEdges(World world, Random rand, int cx, int cy, int cz, int radius, Block top, Block filler) {
+    private void erodeIslandEdges(World world, Random rand, int cx, int cy, int cz, int radius,
+                                  Block top, Block filler, HeightCache cache) {
         int outer = Math.max(8, radius);
         int inner = (int)(outer * 0.70F);
 
@@ -699,7 +705,7 @@ public class EndIslandGenerator {
 
                 int x = cx + dx;
                 int z = cz + dz;
-                int topY = world.getTopSolidOrLiquidBlock(x, z);
+                int topY = getSurfaceY(world, cache, x, z, cy - 26, cy + 30);
                 if (topY < cy - 24 || topY > cy + 28) continue;
 
                 int hash = Math.abs(dx * 37 + dz * 57);
@@ -729,12 +735,14 @@ public class EndIslandGenerator {
                 ? EndExpansion.coralStoneEnd
                 : (EndExpansion.mossyAshenStone != null ? EndExpansion.mossyAshenStone : Blocks.end_stone);
 
+        HeightCache cache = new HeightCache();
+
         for (int i = 0; i < featureCount; i++) {
             float a = rand.nextFloat() * (float)(Math.PI * 2);
             float d = 6 + rand.nextFloat() * (radius * 0.92F);
             int x = cx + (int)(Math.cos(a) * d);
             int z = cz + (int)(Math.sin(a) * d);
-            int y = world.getTopSolidOrLiquidBlock(x, z);
+            int y = getSurfaceY(world, cache, x, z, cy - 30, cy + 32);
             if (y < cy - 28 || y > cy + 30) continue;
 
             if (rand.nextInt(4) == 0) {
@@ -751,7 +759,7 @@ public class EndIslandGenerator {
                     for (int dz = -ring; dz <= ring; dz++) {
                         if (dx * dx + dz * dz > ring * ring) continue;
                         if (rand.nextInt(3) == 0) continue;
-                        int py = world.getTopSolidOrLiquidBlock(x + dx, z + dz) - 1;
+                        int py = getSurfaceY(world, cache, x + dx, z + dz, cy - 30, cy + 32) - 1;
                         if (py >= cy - 30) world.setBlock(x + dx, py, z + dz, accent, 0, 2);
                     }
                 }
@@ -765,7 +773,7 @@ public class EndIslandGenerator {
             float d = 5 + rand.nextFloat() * (radius * 0.88F);
             int baseX = cx + (int)(Math.cos(a) * d);
             int baseZ = cz + (int)(Math.sin(a) * d);
-            int baseY = world.getTopSolidOrLiquidBlock(baseX, baseZ);
+            int baseY = getSurfaceY(world, cache, baseX, baseZ, cy - 30, cy + 32);
             if (baseY < cy - 26 || baseY > cy + 30) continue;
 
             int blobR = 1 + rand.nextInt(2);
@@ -776,7 +784,7 @@ public class EndIslandGenerator {
 
                     int x = baseX + dx;
                     int z = baseZ + dz;
-                    int y = world.getTopSolidOrLiquidBlock(x, z) - 1;
+                    int y = getSurfaceY(world, cache, x, z, cy - 30, cy + 32) - 1;
                     if (y < cy - 30 || y > cy + 30) continue;
 
                     world.setBlock(x, y, z, accent, 0, 2);
@@ -872,6 +880,38 @@ public class EndIslandGenerator {
         public final int x, y, z, radius;
         public IslandNode(int x, int y, int z, int radius) {
             this.x = x; this.y = y; this.z = z; this.radius = radius;
+        }
+    }
+
+    private int getSurfaceY(World world, HeightCache cache, int x, int z, int minY, int maxY) {
+        int cached = cache.get(x, z);
+        if (cached != Integer.MIN_VALUE) {
+            return cached;
+        }
+
+        int y = world.getTopSolidOrLiquidBlock(x, z);
+        if (y < minY || y > maxY) {
+            y = Math.max(minY, Math.min(maxY, y));
+        }
+
+        cache.put(x, z, y);
+        return y;
+    }
+
+    private static class HeightCache {
+        private final Map<Long, Integer> values = new HashMap<Long, Integer>();
+
+        int get(int x, int z) {
+            Integer v = values.get(key(x, z));
+            return v == null ? Integer.MIN_VALUE : v;
+        }
+
+        void put(int x, int z, int y) {
+            values.put(key(x, z), y);
+        }
+
+        private long key(int x, int z) {
+            return ((long) x << 32) ^ (z & 0xFFFFFFFFL);
         }
     }
 }

@@ -68,14 +68,14 @@ public class WorldGenManager implements IWorldGenerator {
         // Большие архипелаги: чаще несколько островов, чтобы мир был насыщеннее.
         int islandCount;
         int countRoll = rand.nextInt(16);
-        if (countRoll < 5) {
+        if (countRoll < 6) {
+            islandCount = 2;
+        } else if (countRoll < 12) {
             islandCount = 3;
-        } else if (countRoll < 11) {
-            islandCount = 4;
         } else if (countRoll < 15) {
-            islandCount = 5;
+            islandCount = 4;
         } else {
-            islandCount = 6;
+            islandCount = 5;
         }
 
         islandGen.generateCluster(world, rand, blockX, blockZ, biome, islandCount, getRadius(biome, rand));
@@ -109,13 +109,13 @@ public class WorldGenManager implements IWorldGenerator {
     }
 
     private int getRadius(BiomeGenBase biome, Random rand) {
-        if (biome == EndBiomes.biomeCemetery)  return 62 + rand.nextInt(31); // 62–92
-        if (biome == EndBiomes.biomeFortress)  return 56 + rand.nextInt(25); // 56–80
-        if (biome == EndBiomes.biomeJungle)    return 60 + rand.nextInt(27); // 60–86
-        if (biome == EndBiomes.biomeForest)    return 58 + rand.nextInt(27); // 58–84
-        if (biome == EndBiomes.biomeOcean)     return 56 + rand.nextInt(29); // 56–84
-        if (biome == EndBiomes.biomeDesert)    return 60 + rand.nextInt(29); // 60–88
-        if (biome == EndBiomes.biomeInfection) return 50 + rand.nextInt(23); // 50–72
-        return 56 + rand.nextInt(25);
+        if (biome == EndBiomes.biomeCemetery)  return 58 + rand.nextInt(27); // 58–84
+        if (biome == EndBiomes.biomeFortress)  return 54 + rand.nextInt(23); // 54–76
+        if (biome == EndBiomes.biomeJungle)    return 56 + rand.nextInt(25); // 56–80
+        if (biome == EndBiomes.biomeForest)    return 54 + rand.nextInt(25); // 54–78
+        if (biome == EndBiomes.biomeOcean)     return 54 + rand.nextInt(25); // 54–78
+        if (biome == EndBiomes.biomeDesert)    return 56 + rand.nextInt(25); // 56–80
+        if (biome == EndBiomes.biomeInfection) return 48 + rand.nextInt(21); // 48–68
+        return 54 + rand.nextInt(23);
     }
 }
