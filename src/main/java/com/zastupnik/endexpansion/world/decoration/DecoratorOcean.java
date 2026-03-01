@@ -14,8 +14,6 @@ public class DecoratorOcean implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
-        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
-
         generateOceanBasins(world, rand, centerX, centerZ, Math.max(16, radius - 6));
 
         // 1. Пирс с домиком — 1-3 штуки
@@ -36,6 +34,9 @@ public class DecoratorOcean implements IEndBiomeDecorator {
                 generateSunkenShip(world, rand, pos[0], y, pos[1]);
             }
         }
+
+        generateCoralReefs(world, rand, centerX, centerZ, Math.max(12, radius - 2));
+    }
 
     private void generateOceanBasins(World world, Random rand, int centerX, int centerZ, int radius) {
         int basinCount = 3 + rand.nextInt(3);
@@ -289,5 +290,11 @@ public class DecoratorOcean implements IEndBiomeDecorator {
         chest.setInventorySlotContents(2, new ItemStack(Items.ender_pearl, 1 + rand.nextInt(3)));
         chest.setInventorySlotContents(3, new ItemStack(Items.compass, 1));
         chest.setInventorySlotContents(4, new ItemStack(Items.map, 1));
+    }
+
+    private void setIfAir(World world, int x, int y, int z, Block block) {
+        if (world.isAirBlock(x, y, z) || world.getBlock(x, y, z) == Blocks.water) {
+            world.setBlock(x, y, z, block, 0, 2);
+        }
     }
 }
