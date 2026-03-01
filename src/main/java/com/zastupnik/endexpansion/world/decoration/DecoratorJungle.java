@@ -15,6 +15,7 @@ public class DecoratorJungle implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
+        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
 
         // 1. Сначала генерируем деревья — мосты будут между ними
         int treeCount = 4 + rand.nextInt(4);

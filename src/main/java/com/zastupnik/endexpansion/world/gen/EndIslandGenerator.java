@@ -17,7 +17,7 @@ public class EndIslandGenerator {
 
     public List<IslandNode> generateCluster(World world, Random rand,
                                             int cx, int cz, BiomeGenBase biome,
-                                            int islandCount) {
+                                            int islandCount, int baseRadius) {
 
         List<IslandNode> nodes = new ArrayList<>();
         int mainY = getIslandY(rand);
@@ -33,14 +33,14 @@ public class EndIslandGenerator {
                 oy = mainY + rand.nextInt(21) - 10;  // ±10 по высоте
             }
 
-            int radius    = 40 + rand.nextInt(141);   // 40–180
+            int radius    = Math.max(24, baseRadius + rand.nextInt(13) - 6);
             int thickness = pickThickness(rand);
 
             Block top    = getTopBlock(biome);
-            Block filler = getFillerBlock(biome);
+            Block filler = getFillerBlock(biome, rand);
 
             // ===== FIX: biome ставим ОДИН РАЗ на остров, а не на каждый блок =====
-            setBiomeAt(world, ox, oz, biome);
+            setBiomeArea(world, ox, oz, radius + 10, biome);
 
             // ===== генерация =====
             generateShape(world, rand, ox, oy, oz, radius, thickness, top, filler, biome);
@@ -73,14 +73,14 @@ public class EndIslandGenerator {
         return Blocks.end_stone;
     }
 
-    private Block getFillerBlock(BiomeGenBase biome) {
-        if (biome == EndBiomes.biomeCemetery)  return EndExpansion.ashenStone;
-        if (biome == EndBiomes.biomeDesert)    return EndExpansion.sandstoneEnd;
-        if (biome == EndBiomes.biomeForest)    return EndExpansion.ashenStone;
-        if (biome == EndBiomes.biomeInfection) return EndExpansion.pulsingRock;
-        if (biome == EndBiomes.biomeJungle)    return EndExpansion.ashenStone;
-        if (biome == EndBiomes.biomeOcean)     return EndExpansion.oceanStone;
-        if (biome == EndBiomes.biomeFortress)  return EndExpansion.fortressPillar;
+    private Block getFillerBlock(BiomeGenBase biome, Random rand) {
+        if (biome == EndBiomes.biomeCemetery)  return rand.nextInt(4) == 0 ? Blocks.stonebrick : EndExpansion.ashenStone;
+        if (biome == EndBiomes.biomeDesert)    return rand.nextInt(5) == 0 ? Blocks.sandstone : EndExpansion.sandstoneEnd;
+        if (biome == EndBiomes.biomeForest)    return rand.nextInt(4) == 0 ? Blocks.dirt : EndExpansion.ashenStone;
+        if (biome == EndBiomes.biomeInfection) return rand.nextInt(6) == 0 ? Blocks.end_stone : EndExpansion.pulsingRock;
+        if (biome == EndBiomes.biomeJungle)    return rand.nextInt(4) == 0 ? Blocks.stone : EndExpansion.ashenStone;
+        if (biome == EndBiomes.biomeOcean)     return rand.nextInt(4) == 0 ? Blocks.clay : EndExpansion.oceanStone;
+        if (biome == EndBiomes.biomeFortress)  return rand.nextInt(3) == 0 ? Blocks.stonebrick : EndExpansion.fortressPillar;
         return Blocks.end_stone;
     }
 
@@ -522,6 +522,17 @@ public class EndIslandGenerator {
             net.minecraft.world.chunk.Chunk chunk = world.getChunkFromBlockCoords(x, z);
             chunk.getBiomeArray()[(z & 15) << 4 | (x & 15)] = (byte) biome.biomeID;
         } catch (Exception ignored) {}
+    }
+
+    private void setBiomeArea(World world, int cx, int cz, int radius, BiomeGenBase biome) {
+        int r2 = radius * radius;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if (dx * dx + dz * dz <= r2) {
+                    setBiomeAt(world, cx + dx, cz + dz, biome);
+                }
+            }
+        }
     }
 
     // ===== ОКЕАН =====

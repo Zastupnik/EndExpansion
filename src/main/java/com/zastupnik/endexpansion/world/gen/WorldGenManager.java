@@ -17,7 +17,7 @@ public class WorldGenManager implements IWorldGenerator {
     private static final int SAFE_ZONE = 1000;
 
     // Минимальное расстояние между центрами кластеров (в чанках).
-    private static final int MIN_CLUSTER_SPACING_CHUNKS = 20;
+    private static final int MIN_CLUSTER_SPACING_CHUNKS = 14;
 
     @Override
     public void generate(Random random, int chunkX, int chunkZ, World world,
@@ -49,7 +49,7 @@ public class WorldGenManager implements IWorldGenerator {
 
         // ── Шаг 3: Редкость — только часть ячеек содержит острова ───────────────
         // 1 из 4 ячеек → острова на ~25% территории, остальное — пустой Энд
-        if (rand.nextInt(4) != 0) return;
+        if (rand.nextInt(3) != 0) return;
 
         // ── Шаг 4: Позиция кластера внутри ячейки (случайно смещена) ────────────
         int offsetX = rand.nextInt(spacing * 16); // случайный сдвиг в блоках внутри ячейки
@@ -65,12 +65,10 @@ public class WorldGenManager implements IWorldGenerator {
         if (biome == null) return; // EndBiomes ещё не проинициализированы — пропускаем
 
         // ── Шаг 6: Размер и количество островов ─────────────────────────────────
-        int radius = getRadius(biome, rand);
+        // 40% — кластеры 2–4 острова, иначе одиночный.
+        int islandCount = (rand.nextInt(10) < 4) ? (2 + rand.nextInt(3)) : 1;
 
-        // 30% — кластер 2–4 острова, 70% — одиночный
-        int islandCount = (rand.nextInt(10) < 3) ? (2 + rand.nextInt(3)) : 1;
-
-        islandGen.generateCluster(world, rand, blockX, blockZ, biome, islandCount);
+        islandGen.generateCluster(world, rand, blockX, blockZ, biome, islandCount, getRadius(biome, rand));
     }
 
     // ===== БИОМЫ =====
@@ -101,13 +99,13 @@ public class WorldGenManager implements IWorldGenerator {
     }
 
     private int getRadius(BiomeGenBase biome, Random rand) {
-        if (biome == EndBiomes.biomeCemetery)  return 80  + rand.nextInt(121); // 80–200
-        if (biome == EndBiomes.biomeFortress)  return 60  + rand.nextInt(91);  // 60–150
-        if (biome == EndBiomes.biomeJungle)    return 50  + rand.nextInt(101); // 50–150
-        if (biome == EndBiomes.biomeForest)    return 40  + rand.nextInt(81);  // 40–120
-        if (biome == EndBiomes.biomeOcean)     return 60  + rand.nextInt(101); // 60–160
-        if (biome == EndBiomes.biomeDesert)    return 70  + rand.nextInt(131); // 70–200
-        if (biome == EndBiomes.biomeInfection) return 25  + rand.nextInt(51);  // 25–75
-        return 40 + rand.nextInt(61);
+        if (biome == EndBiomes.biomeCemetery)  return 42 + rand.nextInt(23); // 42–64
+        if (biome == EndBiomes.biomeFortress)  return 36 + rand.nextInt(21); // 36–56
+        if (biome == EndBiomes.biomeJungle)    return 38 + rand.nextInt(21); // 38–58
+        if (biome == EndBiomes.biomeForest)    return 34 + rand.nextInt(19); // 34–52
+        if (biome == EndBiomes.biomeOcean)     return 36 + rand.nextInt(23); // 36–58
+        if (biome == EndBiomes.biomeDesert)    return 40 + rand.nextInt(23); // 40–62
+        if (biome == EndBiomes.biomeInfection) return 28 + rand.nextInt(17); // 28–44
+        return 34 + rand.nextInt(21);
     }
 }
