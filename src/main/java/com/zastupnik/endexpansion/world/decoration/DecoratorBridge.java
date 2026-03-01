@@ -91,6 +91,10 @@ public class DecoratorBridge {
                 case RUINED:  buildRuinedSection(world, rand, bx, by, bz, perpX, perpZ, fence, i, len); break;
                 case ARCHED:  buildArchedSection(world, rand, bx, by, bz, perpX, perpZ, fence, i, len, sag); break;
             }
+
+            if (i % 6 == 0 || i == 0 || i == len) {
+                buildSupport(world, bx, by - 1, bz);
+            }
         }
     }
 
@@ -116,7 +120,7 @@ public class DecoratorBridge {
         for (int w = -2; w <= 2; w++) {
             int px = bx + Math.round(perpX * w);
             int pz = bz + Math.round(perpZ * w);
-            world.setBlock(px, by, pz, Blocks.end_stone, 0, 2);
+            placeBridgeBlock(world, px, by, pz, rand);
 
             // Перила только по краям
             if (Math.abs(w) == 2) {
@@ -139,7 +143,7 @@ public class DecoratorBridge {
         for (int w = -1; w <= 1; w++) {
             int px = bx + Math.round(perpX * w);
             int pz = bz + Math.round(perpZ * w);
-            world.setBlock(px, by, pz, Blocks.end_stone, 0, 2);
+            placeBridgeBlock(world, px, by, pz, rand);
             if (Math.abs(w) == 1) {
                 world.setBlock(px, by + 1, pz, fence, 0, 2);
             }
@@ -162,7 +166,7 @@ public class DecoratorBridge {
             if (rand.nextInt(7) != 0) {
                 // Иногда блок чуть сдвинут по Y — обвалившиеся секции
                 int yShift = rand.nextInt(3) == 0 ? -1 : 0;
-                world.setBlock(px, by + yShift, pz, Blocks.end_stone, 0, 2);
+                placeBridgeBlock(world, px, by + yShift, pz, rand);
             }
 
             if (Math.abs(w) == 1 && rand.nextInt(3) != 0) {
@@ -175,7 +179,7 @@ public class DecoratorBridge {
             int side = rand.nextBoolean() ? 2 : -2;
             int px   = bx + Math.round(perpX * side);
             int pz   = bz + Math.round(perpZ * side);
-            world.setBlock(px, by, pz, Blocks.end_stone, 0, 2);
+            placeBridgeBlock(world, px, by, pz, rand);
         }
     }
 
@@ -190,7 +194,7 @@ public class DecoratorBridge {
         for (int w = -1; w <= 1; w++) {
             int px = bx + Math.round(perpX * w);
             int pz = bz + Math.round(perpZ * w);
-            world.setBlock(px, by, pz, Blocks.end_stone, 0, 2);
+            placeBridgeBlock(world, px, by, pz, rand);
             if (Math.abs(w) == 1) {
                 world.setBlock(px, by + 1, pz, fence, 0, 2);
             }
@@ -206,9 +210,28 @@ public class DecoratorBridge {
                 int pz1 = bz + Math.round(perpZ * 2);
                 int px2 = bx - Math.round(perpX * 2);
                 int pz2 = bz - Math.round(perpZ * 2);
-                world.setBlock(px1, by - ad, pz1, Blocks.end_stone, 0, 2);
-                world.setBlock(px2, by - ad, pz2, Blocks.end_stone, 0, 2);
+                placeBridgeBlock(world, px1, by - ad, pz1, rand);
+                placeBridgeBlock(world, px2, by - ad, pz2, rand);
             }
         }
     }
+
+    private void buildSupport(World world, int x, int y, int z) {
+        int minY = Math.max(30, y - 24);
+        for (int sy = y; sy >= minY; sy--) {
+            Block at = world.getBlock(x, sy, z);
+            if (at != Blocks.air && at != Blocks.water) break;
+            world.setBlock(x, sy, z, EndExpansion.fortressPillar != null ? EndExpansion.fortressPillar : Blocks.cobblestone, 0, 2);
+        }
+    }
+
+    private void placeBridgeBlock(World world, int x, int y, int z, Random rand) {
+        Block block = Blocks.end_stone;
+        int r = rand.nextInt(8);
+        if (r == 0) block = Blocks.stonebrick;
+        else if (r == 1) block = Blocks.cobblestone;
+        else if (r == 2 && EndExpansion.fortressBrick != null) block = EndExpansion.fortressBrick;
+        world.setBlock(x, y, z, block, 0, 2);
+    }
+
 }

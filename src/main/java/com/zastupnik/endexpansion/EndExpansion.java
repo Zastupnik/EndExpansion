@@ -18,6 +18,9 @@ import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
 import net.minecraftforge.common.MinecraftForge;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Mod(modid = EndExpansion.MODID, name = EndExpansion.NAME, version = EndExpansion.VERSION)
 public class EndExpansion {
 
@@ -34,6 +37,9 @@ public class EndExpansion {
     public static final CreativeTabs tabEndExpansion = new CreativeTabs("tabEndExpansion") {
         @Override public Item getTabIconItem() { return Item.getItemFromBlock(EndExpansion.deadGrass); }
     };
+
+    private static final List<Block> generatedDecorBlocks = new ArrayList<Block>();
+    private static final List<Item> generatedEndItems = new ArrayList<Item>();
 
     // =========================================================================
     // БЛОКИ — ПОВЕРХНОСТИ (5)
@@ -216,6 +222,41 @@ public class EndExpansion {
         soulJar     = regItem(new ItemEndBase().setUnlocalizedName("soul_jar"),    "soul_jar");
         endKey      = regItem(new ItemEndBase().setUnlocalizedName("end_key"),     "end_key");
         voidBottle  = regItem(new ItemEndBase().setUnlocalizedName("void_bottle"), "void_bottle");
+
+        generateExtraConsumables();
+        generateExtraArtifacts();
+    }
+
+    private void generateExtraConsumables() {
+        String[] extraFoods = {
+                "void_berry", "ender_stew", "ashen_cookie", "chorus_wrap", "twilight_broth",
+                "spore_biscuit", "rune_toast", "crystal_pie", "shadow_jam", "withered_nuts",
+                "ether_fillet", "void_sashimi", "end_tea", "starlit_noodles", "ancient_porridge",
+                "ghost_pepper", "moon_melon", "dusk_pear", "nether_lichen_snack", "rift_salad",
+                "obsidian_chips", "echo_honey", "parasite_roll", "hollow_fruit", "cursed_truffle",
+                "abyss_cocoa", "void_yogurt", "ender_cheese", "night_kebab", "chaos_tart"
+        };
+
+        for (int i = 0; i < extraFoods.length; i++) {
+            int hunger = 2 + (i % 7);
+            float saturation = 0.3F + (i % 6) * 0.2F;
+            Item item = regItem(new ItemEndFood(hunger, saturation).setUnlocalizedName(extraFoods[i]), extraFoods[i]);
+            generatedEndItems.add(item);
+        }
+    }
+
+    private void generateExtraArtifacts() {
+        String[] extraArtifacts = {
+                "void_totem", "ancient_lens", "end_fragment", "rift_compass", "echo_prism",
+                "soul_coin", "cluster_map", "abyssal_gear", "resonance_core", "spectral_thread",
+                "fortress_emblem", "desert_seal", "ocean_shell", "infected_capsule", "jungle_idol",
+                "cemetery_sigil", "star_ink", "elder_tablet", "chorus_string", "rift_anchor"
+        };
+
+        for (String name : extraArtifacts) {
+            Item item = regItem(new ItemEndBase().setUnlocalizedName(name), name);
+            generatedEndItems.add(item);
+        }
     }
 
     // =========================================================================
@@ -328,6 +369,61 @@ public class EndExpansion {
         makeWoodSet(ancientLog,    "ancient");
         makeWoodSet(infectedStalk, "infected");
         makeWoodSet(tropicalLog,   "tropical");
+
+        generateLargeDecorCatalog();
+    }
+
+    private void generateLargeDecorCatalog() {
+        // >150 декоративных блоков: кирпичи/стены/ступени/заборы/двери/калитки/листва.
+        String[] themes = {
+                "ashen", "ocean", "pulsing", "sand", "fortress", "marble", "corrupted", "obsidian", "crystal", "mossy",
+                "void", "ghost", "ancient", "twilight"
+        };
+
+        for (String theme : themes) {
+            Block stone = new BlockEndBase(Material.rock, theme + "_tile", Block.soundTypeStone, 2.5F, 12.0F);
+            reg(stone);
+            generatedDecorBlocks.add(stone);
+            addDecorVariants(theme, stone, Material.rock, false);
+        }
+
+        Block[] woods = {witheredLog, ancientLog, infectedStalk, tropicalLog};
+        String[] woodThemes = {"withered", "ancient", "infected", "tropical"};
+        for (int i = 0; i < woods.length; i++) {
+            Block plank = new BlockEndBase(Material.wood, woodThemes[i] + "_board", Block.soundTypeWood, 2.0F, 5.0F);
+            reg(plank);
+            generatedDecorBlocks.add(plank);
+            addDecorVariants(woodThemes[i], plank, Material.wood, true);
+        }
+    }
+
+    private void addDecorVariants(String theme, Block base, Material material, boolean wooden) {
+        Block stairs = new BlockEndStairs(base, theme + "_decor_stairs");
+        Block wall = new BlockEndWall(base, theme + "_decor_wall");
+        Block fence = new BlockEndFence(theme + "_decor_fence", material);
+        Block gate = new BlockEndGate(base, theme + "_decor_gate");
+        Block leaves = new BlockEndLeaves(theme + "_decor_leaves");
+        Block door = new BlockEndBase(wooden ? Material.wood : Material.iron, theme + "_decor_door", Block.soundTypeWood, 2.0F, 5.0F);
+        Block pillar = new BlockEndBase(Material.rock, theme + "_decor_pillar", Block.soundTypeStone, 2.5F, 15.0F);
+        Block lantern = new BlockEndBase(Material.glass, theme + "_decor_lantern", Block.soundTypeGlass, 0.6F, 2.0F).setLightLevel(0.45F);
+
+        reg(stairs);
+        reg(wall);
+        reg(fence);
+        reg(gate);
+        reg(leaves);
+        reg(door);
+        reg(pillar);
+        reg(lantern);
+
+        generatedDecorBlocks.add(stairs);
+        generatedDecorBlocks.add(wall);
+        generatedDecorBlocks.add(fence);
+        generatedDecorBlocks.add(gate);
+        generatedDecorBlocks.add(leaves);
+        generatedDecorBlocks.add(door);
+        generatedDecorBlocks.add(pillar);
+        generatedDecorBlocks.add(lantern);
     }
 
     // =========================================================================

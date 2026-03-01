@@ -14,9 +14,10 @@ public class DecoratorDesert implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
+        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
 
         // 1. Пирамида — 1 на остров, в центре
-        generatePyramid(world, rand, centerX, centerY, centerZ);
+        generatePyramid(world, rand, centerX, groundedCenterY, centerZ);
 
         // 2. Разрушенные храмы — 1-2 штуки
         int templeCount = 1 + rand.nextInt(2);

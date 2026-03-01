@@ -14,6 +14,7 @@ public class DecoratorInfection implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
+        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
 
         // 1. Гигантские грибы — 3-5 штук, доминируют над биомом
         int mushroomCount = 3 + rand.nextInt(3);

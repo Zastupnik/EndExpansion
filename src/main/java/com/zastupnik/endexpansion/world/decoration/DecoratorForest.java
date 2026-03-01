@@ -14,6 +14,7 @@ public class DecoratorForest implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
+        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
 
         // 1. Руины — 2-4 штуки на остров
         int ruinCount = 2 + rand.nextInt(3);

@@ -13,8 +13,9 @@ public class DecoratorCemetery implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
+        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
         // 1. Генерируем домик хранителя в центре острова
-        generateKeeperHouse(world, rand, centerX, centerY, centerZ);
+        generateKeeperHouse(world, rand, centerX, groundedCenterY, centerZ);
 
         // 2. Генерируем участки с могилами вокруг
         int plotCount = 3 + rand.nextInt(4); // 3-6 участков
