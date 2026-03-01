@@ -13,32 +13,35 @@ public class DecoratorCemetery implements IEndBiomeDecorator {
 
     @Override
     public void decorate(World world, Random rand, int centerX, int centerY, int centerZ, int radius) {
-        int groundedCenterY = Math.max(40, world.getTopSolidOrLiquidBlock(centerX, centerZ));
+        int groundedCenterY = Math.max(40, findGroundY(world, centerX, centerZ));
         // 1. Генерируем домик хранителя в центре острова
         generateKeeperHouse(world, rand, centerX, groundedCenterY, centerZ);
+        anchorRect(world, centerX, groundedCenterY - 1, centerZ, 7, 7, EndExpansion.ashenStone);
 
         // 2. Генерируем участки с могилами вокруг
-        int plotCount = 3 + rand.nextInt(4); // 3-6 участков
+        int plotCount = 4 + rand.nextInt(5); // 4-8 участков
         for (int i = 0; i < plotCount; i++) {
             int angle = rand.nextInt(360);
-            int dist  = 15 + rand.nextInt(radius / 2);
+            int dist  = 12 + rand.nextInt(Math.max(6, radius / 2));
             int px    = centerX + (int)(Math.cos(Math.toRadians(angle)) * dist);
             int pz    = centerZ + (int)(Math.sin(Math.toRadians(angle)) * dist);
-            int py    = world.getTopSolidOrLiquidBlock(px, pz);
+            int py    = findGroundY(world, px, pz);
 
             generateGravePlot(world, rand, px, py, pz);
+            anchorRect(world, px, py - 1, pz, 9, 9, EndExpansion.ashenStone);
         }
 
         // 3. Склепы — редко, 1-2 на остров
         int cryptCount = 1 + rand.nextInt(2);
         for (int i = 0; i < cryptCount; i++) {
             int angle = rand.nextInt(360);
-            int dist  = 20 + rand.nextInt(radius / 3);
+            int dist  = 18 + rand.nextInt(Math.max(5, radius / 3));
             int cx    = centerX + (int)(Math.cos(Math.toRadians(angle)) * dist);
             int cz    = centerZ + (int)(Math.sin(Math.toRadians(angle)) * dist);
-            int cy    = world.getTopSolidOrLiquidBlock(cx, cz);
+            int cy    = findGroundY(world, cx, cz);
 
             generateCrypt(world, rand, cx, cy, cz);
+            anchorRect(world, cx, cy - 1, cz, 5, 6, EndExpansion.fortressBrick);
         }
     }
 
@@ -198,6 +201,27 @@ public class DecoratorCemetery implements IEndBiomeDecorator {
     }
 
     // ===== УТИЛИТЫ =====
+
+
+    private int findGroundY(World world, int x, int z) {
+        int y = world.getTopSolidOrLiquidBlock(x, z);
+        while (y > 2 && world.isAirBlock(x, y - 1, z)) y--;
+        return y;
+    }
+
+    private void anchorRect(World world, int x, int y, int z, int w, int d, Block block) {
+        for (int dx = 0; dx < w; dx++) {
+            for (int dz = 0; dz < d; dz++) {
+                int px = x + dx;
+                int pz = z + dz;
+                int py = y;
+                while (py > 2 && world.isAirBlock(px, py, pz)) {
+                    world.setBlock(px, py, pz, block, 0, 2);
+                    py--;
+                }
+            }
+        }
+    }
 
     /**
      * Дорожка из плит в заданном направлении
